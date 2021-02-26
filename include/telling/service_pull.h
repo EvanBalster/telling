@@ -14,10 +14,23 @@ namespace telling
 	namespace service
 	{
 		/*
-			Callback-based client for pull messages.
+			Base class for PULL communicators with socket-sharing.
+				Needs additional code to process I/O.
 		*/
-		class Pull :
-			public    Communicator,
+		class Pull_Base : public Communicator
+		{
+		public:
+			explicit Pull_Base()                        : Communicator(SERVICE, PUSH_PULL) {}
+			Pull_Base(const Pull_Base &shareSocket)     : Communicator(shareSocket)        {}
+			~Pull_Base() {}
+		};
+
+
+		/*
+			Pull communicator that calls an AsyncRecv delegate.
+		*/
+		class Pull_Async :
+			public    Pull_Base,
 			protected AsyncRecv::Operator<nng::socket_view>
 		{
 		public:
@@ -25,21 +38,22 @@ namespace telling
 				Construct with an AsyncRecv delegate.
 					Begins listening for messages immediately.
 			*/
-			Pull(std::shared_ptr<AsyncRecv> p)                              : Communicator(SERVICE, PUSH_PULL), Operator(socketView(), p) {}
-			Pull(std::shared_ptr<AsyncRecv> p, const Pull &shareSocket)     : Communicator(shareSocket),        Operator(socketView(), p) {}
-			~Pull() {}
+			Pull_Async(std::shared_ptr<AsyncRecv> p)                                   : Pull_Base(),            Operator(socketView(), p) {}
+			Pull_Async(std::shared_ptr<AsyncRecv> p, const Pull_Base &shareSocket)     : Pull_Base(shareSocket), Operator(socketView(), p) {}
+			~Pull_Async() {}
 		};
 
 
 		/*
-			Non-blocking client socket for subscriptions.
+			A Pull communicator with a simple "inbox" queue.
+				This is appropriate whenever congestion is not an issue.
 		*/
-		class Pull_Inbox : public Pull
+		class Pull_Box : public Pull_Async
 		{
 		public:
-			explicit Pull_Inbox()                  : Pull(std::make_shared<AsyncRecvQueue>())              {}
-			Pull_Inbox(const Pull &shareSocket)    : Pull(std::make_shared<AsyncRecvQueue>(), shareSocket) {}
-			~Pull_Inbox() {}
+			explicit Pull_Box()                       : Pull_Async(std::make_shared<AsyncRecvQueue>())              {}
+			Pull_Box(const Pull_Base &shareSocket)    : Pull_Async(std::make_shared<AsyncRecvQueue>(), shareSocket) {}
+			~Pull_Box() {}
 			
 
 			/*

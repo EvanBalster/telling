@@ -13,41 +13,62 @@ namespace telling
 	namespace client
 	{
 		/*
-			Callback-based push communicator.
+			Base class for PUSH communicators with socket-sharing.
+				Needs additional code to process I/O.
 		*/
-		class Push :
-			public    Communicator,
+		class Push_Base : public Communicator
+		{
+		public:
+			explicit Push_Base()                        : Communicator(CLIENT, PUSH_PULL) {}
+			Push_Base(const Push_Base &shareSocket)     : Communicator(shareSocket)       {}
+			~Push_Base() {}
+		};
+
+
+		/*
+			Push communicator that calls an AsyncSend delegate.
+				Push (AKA "Push_Outbox") includes a delegate suitable for most purposes.
+		*/
+		class Push_Async :
+			public    Push_Base,
 			protected AsyncSend::Operator<nng::socket_view>
 		{
 		public:
 			/*
 				Construct with an AsyncSend delegate.
 			*/
-			Push(std::shared_ptr<AsyncSend> p)                              : Communicator(CLIENT, PUSH_PULL), Operator(socketView(), p) {}
-			Push(std::shared_ptr<AsyncSend> p, const Push &shareSocket)     : Communicator(shareSocket),       Operator(socketView(), p) {}
-			~Push() {}
+			Push_Async(std::shared_ptr<AsyncSend> p)                                   : Push_Base(),            Operator(socketView(), p) {}
+			Push_Async(std::shared_ptr<AsyncSend> p, const Push_Base &shareSocket)     : Push_Base(shareSocket), Operator(socketView(), p) {}
+			~Push_Async() {}
 
 			/*
-				Attempt to push a message.  Returns whether accepted by delegate.
+				Attempt to push a message.
+					Delegate may throw an exception rather than accepting.
 			*/
-			bool push(nng::msg &&msg)
+			void push(nng::msg &&msg)
 			{
-				if (!isReady())
-					throw nng::exception(nng::error::closed, "Push Communicator is not ready.");
-
-				return send_msg(std::move(msg));
+				if (!isReady()) throw nng::exception(nng::error::closed, "Push Communicator is not ready.");
+				send_msg(std::move(msg));
 			}
 		};
 
+
 		/*
-			A Push communicator with a built-in "outbox" queue.
+			A Push communicator with a simple "outbox" queue.
+				This is appropriate whenever congestion is not an issue.
 		*/
-		class Push_Outbox : public Push
+		class Push_Box : public Push_Async
 		{
 		public:
-			explicit Push_Outbox()                  : Push(std::make_shared<AsyncSendQueue>())              {}
-			Push_Outbox(const Push &shareSocket)    : Push(std::make_shared<AsyncSendQueue>(), shareSocket) {}
-			~Push_Outbox() {}
+			explicit Push_Box()                       : Push_Async(std::make_shared<AsyncSendQueue>())              {}
+			Push_Box(const Push_Base &shareSocket)    : Push_Async(std::make_shared<AsyncSendQueue>(), shareSocket) {}
+			~Push_Box() {}
 		};
+
+
+		/*
+			Push_Outbox is so useful we just call it Push.
+		*/
+		//using Push = Push_Box;
 	}
 }

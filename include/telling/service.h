@@ -10,21 +10,21 @@ namespace telling
 	/*
 		A non-blocking service which is checked like a mailbox.
 	*/
-	class Service_Mailbox
+	class Service_Box
 	{
 	public:
 		const std::string uri;
 
 		HostAddress::Base address() const    {return HostAddress::Base::InProc(uri);}
 
-		service::Reply          replier;
-		service::Pull_Inbox     puller;
-		service::Publish_Outbox publisher;
+		service::Reply       replier;
+		service::Pull_Box    puller;
+		service::Publish_Box publisher;
 
 
 	public:
-		Service_Mailbox(std::string _uri, std::string_view serverID = std::string_view());
-		~Service_Mailbox();
+		Service_Box(std::string _uri, std::string_view serverID = std::string_view());
+		~Service_Box();
 
 		void serve(std::string_view serverID);
 
@@ -44,8 +44,7 @@ namespace telling
 
 
 		/*
-			Push a message to the server.
-				Throws nng::error on failure.
+			Push a message to the server. Throws nng::exception on failure.
 		*/
 		void publish(nng::msg &&msg)         {publisher.publish(std::move(msg));}
 

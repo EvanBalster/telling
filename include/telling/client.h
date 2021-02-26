@@ -10,17 +10,17 @@ namespace telling
 	/*
 		A non-blocking client which is checked like a mailbox.
 	*/
-	class Client_Mailbox
+	class Client_Box
 	{
 	public:
-		client::Subscribe_Inbox subscriber;
-		client::Push_Outbox      pusher;
-		client::Request         requester;
+		client::Subscribe_Box subscriber;
+		client::Push_Box      pusher;
+		client::Request       requester;
 
 
 	public:
-		Client_Mailbox();
-		~Client_Mailbox();
+		Client_Box();
+		~Client_Box();
 
 		/*
 			Clients must contact a server or service in order to begin communicating.
@@ -33,17 +33,18 @@ namespace telling
 		void disconnectAll()                              noexcept    {Each_DisconnectAll   (requester, subscriber, pusher);}
 		void close        ()                              noexcept    {Each_Close           (requester, subscriber, pusher);}
 
-		/*
-			Push a message to the server.
-				Throws nng::error on failure.
-		*/
-		bool push(nng::msg &&msg)                        {return pusher.push(std::move(msg));}
 
 		/*
-			Create a request.
-				May fail, throwing
+			Push a message to the server. Throws nng::exception on failure.
+		*/
+		void push(nng::msg &&msg)                        {pusher.push(std::move(msg));}
+
+
+		/*
+			Create a request. Throws nng::exception on failure.
 		*/
 		std::future<nng::msg> request(nng::msg &&msg)    {return requester.request(std::move(msg));}
+
 
 		/*
 			Manage subscriptions.

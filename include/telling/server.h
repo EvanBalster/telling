@@ -107,8 +107,8 @@ namespace telling
 			const std::string  path;
 
 
-			bool sendPush   (nng::msg &&msg)   {std::lock_guard<std::mutex> g(mtx); return push.push        (std::move(msg));}
-			bool sendRequest(nng::msg &&msg)   {std::lock_guard<std::mutex> g(mtx); return req_send.send_msg(std::move(msg));}
+			void sendPush   (nng::msg &&msg)   {std::lock_guard<std::mutex> g(mtx); push.push        (std::move(msg));}
+			void sendRequest(nng::msg &&msg)   {std::lock_guard<std::mutex> g(mtx); req_send.send_msg(std::move(msg));}
 			
 
 		public:
@@ -130,8 +130,8 @@ namespace telling
 				void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) final;
 			};
 
-			RequestRaw         req;
-			client::Push_Outbox push;
+			RequestRaw       req;
+			client::Push_Box push;
 
 			// I/O handling for requests
 			std::shared_ptr<AsyncSendQueue>       req_sendQueue;
@@ -166,7 +166,15 @@ namespace telling
 
 				auto r = route(path);
 				if (!r) return StatusCode::NotFound;
-				if (!r->sendPush(std::move(msg))) return StatusCode::ServiceUnavailable;
+				try
+				{
+					r->sendPush(std::move(msg));
+				}
+				catch (nng::exception e)
+				{
+					// TODO account for issues?
+					return StatusCode::ServiceUnavailable;
+				}
 				return StatusCode::OK;
 			}
 
@@ -176,7 +184,15 @@ namespace telling
 
 				auto r = route(path);
 				if (!r) return StatusCode::NotFound;
-				if (!r->sendRequest(std::move(msg))) return StatusCode::ServiceUnavailable;
+				try
+				{
+					r->sendRequest(std::move(msg));
+				}
+				catch (nng::exception e)
+				{
+					// TODO account for issues?
+					return StatusCode::ServiceUnavailable;
+				}
 				return StatusCode::OK;
 			}
 
@@ -206,7 +222,7 @@ namespace telling
 			void run_management_thread();
 
 			std::shared_ptr<Delegate_Sub> subscribe_delegate;
-			client::Subscribe             subscribe;
+			client::Subscribe_Async       subscribe;
 
 			friend class Delegate_Sub;
 			AsyncOp::Directive received(const MsgView::Bulletin&, nng::msg&&);
@@ -253,8 +269,8 @@ namespace telling
 			using Delegate_Sub = DelegateRecv<Publish, MsgView::Bulletin>;
 			std::shared_ptr<Delegate_Sub> sub_delegate;
 
-			client::Subscribe      subscribe;
-			service::Publish_Outbox publish;
+			client::Subscribe_Async subscribe;
+			service::Publish_Box    publish;
 
 			friend class Delegate_Sub;
 			AsyncOp::Directive received(const MsgView::Bulletin&, nng::msg&&);
@@ -279,7 +295,7 @@ namespace telling
 			using Delegate_Pull = DelegateRecv<Pull, MsgView::Request>;
 			std::shared_ptr<Delegate_Pull> pull_delegate;
 
-			service::Pull pull;
+			service::Pull_Async pull;
 
 			friend class Delegate_Pull;
 			AsyncOp::Directive received(const MsgView::Request&, nng::msg&&);

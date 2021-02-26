@@ -13,11 +13,30 @@ namespace telling
 {
 	namespace client
 	{
+		// Shorthand & longhand
+		class Sub_Base;  using Subscribe_Base  = Sub_Base;
+		class Sub_Async; using Subscribe_Async = Sub_Async;
+		class Sub_Box;   using Subscribe_Box   = Sub_Box;
+
+
 		/*
-			Callback-based client for subscriptions.
+			Base class for SUB communicators with socket-sharing.
+				Needs additional code to process I/O.
 		*/
-		class Subscribe :
-			public    Communicator,
+		class Sub_Base : public Communicator
+		{
+		public:
+			explicit Sub_Base()                       : Communicator(CLIENT, PUB_SUB) {}
+			Sub_Base(const Sub_Base &shareSocket)     : Communicator(shareSocket)     {}
+			~Sub_Base() {}
+		};
+
+
+		/*
+			Subscribe communicator that calls an AsyncRecv delegate.
+		*/
+		class Sub_Async :
+			public    Sub_Base,
 			protected AsyncRecv::Operator<nng::ctx>
 		{
 		public:
@@ -25,9 +44,9 @@ namespace telling
 				Construct with an AsyncRecv delegate.
 					Begins listening for messages immediately.
 			*/
-			Subscribe(std::shared_ptr<AsyncRecv> p)                                   : Communicator(CLIENT, PUB_SUB), Operator(make_ctx(), p) {}
-			Subscribe(std::shared_ptr<AsyncRecv> p, const Subscribe &shareSocket)     : Communicator(shareSocket),     Operator(make_ctx(), p) {}
-			~Subscribe() {}
+			Sub_Async(std::shared_ptr<AsyncRecv> p)                                  : Sub_Base(),            Operator(make_ctx(), p) {}
+			Sub_Async(std::shared_ptr<AsyncRecv> p, const Sub_Base &shareSocket)     : Sub_Base(shareSocket), Operator(make_ctx(), p) {}
+			~Sub_Async() {}
 
 			/*
 				Manage subscriptions.
@@ -40,12 +59,12 @@ namespace telling
 		/*
 			Non-blocking client socket for subscriptions.
 		*/
-		class Subscribe_Inbox : public Subscribe
+		class Sub_Box : public Sub_Async
 		{
 		public:
-			explicit Subscribe_Inbox()                       : Subscribe(std::make_shared<AsyncRecvQueue>())              {}
-			Subscribe_Inbox(const Subscribe &shareSocket)    : Subscribe(std::make_shared<AsyncRecvQueue>(), shareSocket) {}
-			~Subscribe_Inbox() {}
+			explicit Sub_Box()                      : Sub_Async(std::make_shared<AsyncRecvQueue>())              {}
+			Sub_Box(const Sub_Base &shareSocket)    : Sub_Async(std::make_shared<AsyncRecvQueue>(), shareSocket) {}
+			~Sub_Box() {}
 			
 
 			/*

@@ -10,7 +10,7 @@ using namespace telling;
 
 
 
-Service_Mailbox::Service_Mailbox(std::string _uri, std::string_view serverID) :
+Service_Box::Service_Box(std::string _uri, std::string_view serverID) :
 	uri(_uri)
 {
 	auto base = address();
@@ -22,7 +22,7 @@ Service_Mailbox::Service_Mailbox(std::string _uri, std::string_view serverID) :
 	if (serverID.length()) serve(serverID);
 }
 
-Service_Mailbox::~Service_Mailbox()
+Service_Box::~Service_Box()
 {
 	std::cout << __FUNCTION__ << " start" << std::endl;
 
@@ -33,14 +33,14 @@ Service_Mailbox::~Service_Mailbox()
 	std::cout << __FUNCTION__ << " end" << std::endl;
 }
 
-void Service_Mailbox::serve(std::string_view serverID)
+void Service_Box::serve(std::string_view serverID)
 {
 	publisher.dial(HostAddress::Base::InProc(serverID));
 
 	broadcastServiceRegistration();
 }
 
-void Service_Mailbox::broadcastServiceRegistration()
+void Service_Box::broadcastServiceRegistration()
 {
 	MsgWriter msg = MsgWriter::Bulletin("*services");
 	msg.writeData(uri);

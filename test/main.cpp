@@ -201,7 +201,7 @@ int main(int argc, char **argv)
 
 		cout << "==== Creating service." << endl;
 		{
-		Service_Mailbox service(uri, SERVER_NAME);
+		Service_Box service(uri, SERVER_NAME);
 
 		while (timerTotal < lifetime_ms)
 		{
@@ -335,7 +335,7 @@ int main(int argc, char **argv)
 
 		cout << "==== Creating client." << endl;
 
-		Client_Mailbox client;
+		Client_Box client;
 
 
 		cout << "==== Connecting client to server." << endl;

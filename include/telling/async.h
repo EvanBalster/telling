@@ -69,9 +69,12 @@ namespace telling
 			Asynchronous events.
 				Only one call with occur at a time per caller.
 				
-				asyncRecv_msg is required.
+				asyncRecv_start -- optional; throw nng::exception to prevent
+				asyncRecv_msg   -- required; receive a message
+				asyncRecv_error -- recommended; error occurred receiving message
+				asyncRecv_stop  -- optional
 		*/
-		virtual bool      asyncRecv_start()                      {return true;}
+		virtual void      asyncRecv_start()                      {}
 		virtual Directive asyncRecv_msg  (nng::msg &&msg)        = 0;
 		virtual Directive asyncRecv_error(nng::error status)     {return TERMINATE;}
 		virtual void      asyncRecv_stop (nng::error status)     {}
@@ -88,9 +91,9 @@ namespace telling
 			Operator(T_RecvCtx &&_ctx, std::shared_ptr<AsyncRecv> _delegate, bool begin = true);
 			~Operator();
 
-			// Start/stop receiving
-			bool recv_start();
-			void recv_stop();
+			// Start/stop receiving.  Start may throw exceptions on failure.
+			void recv_start();
+			void recv_stop()  noexcept;
 
 			T_RecvCtx       &recv_ctx()       noexcept    {return _recv_ctx;}
 			const T_RecvCtx &recv_ctx() const noexcept    {return _recv_ctx;}
@@ -139,11 +142,11 @@ namespace telling
 			~Operator();
 
 			/*
-				send_msg will return false if the delegate refuses.
+				send_msg may throw an exception if the delegate refuses.
 				send_stop halts sending.
 			*/
-			bool send_msg(nng::msg &&msg);
-			void send_stop();
+			void send_msg(nng::msg &&msg);
+			void send_stop()              noexcept;
 
 			T_SendCtx       &send_ctx()       noexcept    {return _send_ctx;}
 			const T_SendCtx &send_ctx() const noexcept    {return _send_ctx;}
@@ -334,17 +337,14 @@ namespace telling
 	}
 
 	template<typename T_RecvCtx>
-	bool AsyncRecv::Operator<T_RecvCtx>::recv_start()
+	void AsyncRecv::Operator<T_RecvCtx>::recv_start()
 	{
-		if (_recv_delegate->asyncRecv_start())
-		{
-			_recv_ctx.recv(_recv_aio);
-			return true;
-		}
-		else return false;
+		_recv_delegate->asyncRecv_start(); // May throw
+
+		_recv_ctx.recv(_recv_aio);
 	}
 	template<typename T_RecvCtx>
-	void AsyncRecv::Operator<T_RecvCtx>::recv_stop()
+	void AsyncRecv::Operator<T_RecvCtx>::recv_stop() noexcept
 	{
 		_recv_aio.stop();
 		_recv_delegate->asyncRecv_stop(nng::error::success);
@@ -369,7 +369,7 @@ namespace telling
 	}
 
 	template<typename T_SendCtx>
-	bool AsyncSend::Operator<T_SendCtx>::send_msg(nng::msg &&msg)
+	void AsyncSend::Operator<T_SendCtx>::send_msg(nng::msg &&msg)
 	{
 		SendDirective directive = _send_delegate->asyncSend_msg(std::move(msg));
 		switch (directive.directive)
@@ -381,24 +381,24 @@ namespace telling
 				[[fallthrough]]; case INITIATE:
 				_send_aio.set_msg(std::move(directive.sendMsg));
 				_send_ctx.send(_send_aio);
-				return true;
+				return;
 			}
 			else
 			{
 				[[fallthrough]]; case CONTINUE:
-				return true;
+				return;
 			}
 
 		case DECLINE:
-			return false;
+			throw nng::exception(nng::error::nospc, "AsyncSend delegate declined the message.");
 
 		case TERMINATE:
 			send_stop();
-			return false;
+			throw nng::exception(nng::error::closed, "AsyncSend delegate terminated transmission.");
 		}
 	}
 	template<typename T_SendCtx>
-	void AsyncSend::Operator<T_SendCtx>::send_stop()
+	void AsyncSend::Operator<T_SendCtx>::send_stop() noexcept
 	{
 		_send_aio.stop();
 	}

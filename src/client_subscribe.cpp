@@ -10,12 +10,12 @@ using namespace telling::client;
 	Subscribe implementation
 */
 
-void Subscribe::subscribe(std::string_view topic)
+void Sub_Async::subscribe(std::string_view topic)
 {
 	recv_ctx().set_opt(NNG_OPT_SUB_SUBSCRIBE,
 		nng::view((void*) topic.data(), topic.size()));
 }
-void Subscribe::unsubscribe(std::string_view topic)
+void Sub_Async::unsubscribe(std::string_view topic)
 {
 	recv_ctx().set_opt(NNG_OPT_SUB_UNSUBSCRIBE,
 		nng::view((void*) topic.data(), topic.size()));

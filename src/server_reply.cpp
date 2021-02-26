@@ -77,13 +77,16 @@ AsyncOp::Directive Server::Reply::received(const MsgView::Reply &reply, nng::msg
 	server()->log << Name() << ": ...sending reply with status " << reply.status() << std::endl;
 
 	// Forward reply to proper 
-	if (rep_send.send_msg(std::move(msg)))
+	try
 	{
+		rep_send.send_msg(std::move(msg));
 		return AsyncOp::CONTINUE;
 	}
-	else
+	catch (nng::exception e)
 	{
-		server()->log << Name() << ": could not enqueue reply to client" << std::endl;
+		server()->log
+			<< Name() << ": could not enqueue reply to client" << std::endl
+			<< "\t" << e.what() << std::endl;
 		return AsyncOp::DECLINE;
 	}
 }

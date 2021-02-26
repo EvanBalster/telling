@@ -4,10 +4,10 @@
 using namespace telling;
 
 
-Client_Mailbox::Client_Mailbox()
+Client_Box::Client_Box()
 {
 }
-Client_Mailbox::~Client_Mailbox()
+Client_Box::~Client_Box()
 {
 
 }
