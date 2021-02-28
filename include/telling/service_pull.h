@@ -13,17 +13,8 @@ namespace telling
 {
 	namespace service
 	{
-		/*
-			Base class for PULL communicators with socket-sharing.
-				Needs additional code to process I/O.
-		*/
-		class Pull_Base : public Communicator
-		{
-		public:
-			explicit Pull_Base()                        : Communicator(SERVICE, PUSH_PULL) {}
-			Pull_Base(const Pull_Base &shareSocket)     : Communicator(shareSocket)        {}
-			~Pull_Base() {}
-		};
+		// Base type for Push clients.
+		using Pull_Base = Communicator::Pattern_Base<Role::SERVICE, Pattern::PUSH_PULL>;
 
 
 		/*

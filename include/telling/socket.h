@@ -135,7 +135,11 @@ namespace telling
 	class Communicator : public UsingPatternEnums
 	{
 	public:
-		~Communicator();
+		template<ROLE, PATTERN> class Pattern_Base;
+
+
+	public:
+		~Communicator()    {_socket = nullptr;}
 
 
 		/*
@@ -198,14 +202,23 @@ namespace telling
 			Create a Communicator holding a new socket.
 		*/
 		Communicator(
-			ROLE    _role,
-			PATTERN _pattern);
+			ROLE            _role,
+			PATTERN         _pattern,
+			Socket::VARIANT _variant = Socket::STANDARD) :
+				role(_role),
+				pattern(_pattern),
+				protocol(Protocol::Choose(role, pattern)),
+				_socket(std::make_shared<Socket>(_role, _pattern)) {}
 
 		/*
 			Create a communicator based on the given Socket.
 				Throws nng::exception if the socket is null.
 		*/
-		Communicator(std::shared_ptr<Socket> socket);
+		Communicator(std::shared_ptr<Socket> socket) :
+				role   (socket ? socket->role    : Role   ::NO_ROLE),
+				pattern(socket ? socket->pattern : Pattern::NO_PATTERN),
+				protocol(Protocol::Choose(role, pattern)),
+				_socket(socket) {}
 
 		/*
 			Create a Communicator sharing another communicator's socket.
@@ -218,6 +231,19 @@ namespace telling
 		Communicator  (      Communicator&&) = delete;
 		void operator=(const Communicator& ) = delete;
 		void operator=(      Communicator&&) = delete;
+	};
+
+
+	/*
+		Utility base class for sockets adhering to a certain pattern.
+	*/
+	template<ROLE T_Role, PATTERN T_Pattern>
+	class Communicator::Pattern_Base : public Communicator
+	{
+	public:
+		explicit Pattern_Base()                           : Communicator(T_Role, T_Pattern) {}
+		Pattern_Base(const Pattern_Base &shareSocket)     : Communicator(shareSocket)     {}
+		~Pattern_Base() {}
 	};
 
 

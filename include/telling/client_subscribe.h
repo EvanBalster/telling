@@ -13,23 +13,14 @@ namespace telling
 {
 	namespace client
 	{
+		// Base type for Subscribe clients.
+		using Sub_Base = Communicator::Pattern_Base<Role::CLIENT, Pattern::PUB_SUB>;
+
+
 		// Shorthand & longhand
-		class Sub_Base;  using Subscribe_Base  = Sub_Base;
+		using Subscribe_Base                   = Sub_Base;
 		class Sub_Async; using Subscribe_Async = Sub_Async;
 		class Sub_Box;   using Subscribe_Box   = Sub_Box;
-
-
-		/*
-			Base class for SUB communicators with socket-sharing.
-				Needs additional code to process I/O.
-		*/
-		class Sub_Base : public Communicator
-		{
-		public:
-			explicit Sub_Base()                       : Communicator(CLIENT, PUB_SUB) {}
-			Sub_Base(const Sub_Base &shareSocket)     : Communicator(shareSocket)     {}
-			~Sub_Base() {}
-		};
 
 
 		/*

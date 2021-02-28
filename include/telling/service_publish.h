@@ -12,23 +12,15 @@ namespace telling
 {
 	namespace service
 	{
+		// Base type for Publish services.
+		using Pub_Base = Communicator::Pattern_Base<Role::SERVICE, Pattern::PUB_SUB>;
+
+
 		// Shorthand & longhand
-		class Pub_Base;  using Publish_Base  = Pub_Base;
+		using Publish_Base                   = Pub_Base;
 		class Pub_Async; using Publish_Async = Pub_Async;
 		class Pub_Box;   using Publish_Box   = Pub_Box;
 
-
-		/*
-			Base class for PUB communicators with socket-sharing.
-				Needs additional code to process I/O.
-		*/
-		class Pub_Base : public Communicator
-		{
-		public:
-			explicit Pub_Base()                       : Communicator(SERVICE, PUB_SUB) {}
-			Pub_Base(const Pub_Base &shareSocket)     : Communicator(shareSocket)      {}
-			~Pub_Base() {}
-		};
 
 		/*
 			Publish communicator that calls an AsyncSend delegate.

@@ -13,16 +13,26 @@ namespace telling
 {
 	namespace client
 	{
+		// Base type for Request clients.
+		using Req_Base = Communicator::Pattern_Base<Role::CLIENT, Pattern::REQ_REP>;
+
+
+		// Shorthand & longhand
+		using                  Request_Base  = Req_Base;
+		class Req_Async; using Request_Async = Req_Async;
+		class Req_Box;   using Request_Box   = Req_Box;
+
+
 		/*
 			Non-blocking client socket for requests.
 				Supports multiple pending requests.
 				Requests are handled with std::future.
 		*/
-		class Request : public Communicator
+		class Request : public Req_Base
 		{
 		public:
-			explicit Request()           : Communicator(CLIENT, REQ_REP) {}
-			Request(const Request &o)    : Communicator(o) {}
+			explicit Request()           : Req_Base() {}
+			Request(const Request &o)    : Req_Base(o) {}
 			~Request();
 
 			/*

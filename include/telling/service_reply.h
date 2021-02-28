@@ -11,14 +11,24 @@ namespace telling
 {
 	namespace service
 	{
+		// Base type for Reply services.
+		using Rep_Base = Communicator::Pattern_Base<Role::SERVICE, Pattern::REQ_REP>;
+
+
+		// Shorthand & longhand
+		using                  Reply_Base  = Rep_Base;
+		class Rep_Async; using Reply_Async = Rep_Async;
+		class Rep_Box;   using Reply_Box   = Rep_Box;
+
+
 		/*
 			Non-blocking service socket for replying to requests.
 		*/
-		class Reply : public Communicator
+		class Reply : public Rep_Base
 		{
 		public:
-			explicit Reply()         : Communicator(SERVICE, REQ_REP) {_onOpen();}
-			Reply(const Reply &o)    : Communicator(o)                {_onOpen();}
+			explicit Reply()         : Rep_Base()     {_onOpen();}
+			Reply(const Reply &o)    : Rep_Base(o)    {_onOpen();}
 			~Reply();
 
 			/*

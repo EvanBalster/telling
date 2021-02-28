@@ -12,17 +12,8 @@ namespace telling
 {
 	namespace client
 	{
-		/*
-			Base class for PUSH communicators with socket-sharing.
-				Needs additional code to process I/O.
-		*/
-		class Push_Base : public Communicator
-		{
-		public:
-			explicit Push_Base()                        : Communicator(CLIENT, PUSH_PULL) {}
-			Push_Base(const Push_Base &shareSocket)     : Communicator(shareSocket)       {}
-			~Push_Base() {}
-		};
+		// Base type for Push clients.
+		using Push_Base = Communicator::Pattern_Base<Role::CLIENT, Pattern::PUSH_PULL>;
 
 
 		/*
