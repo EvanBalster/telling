@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include "socket.h"
 
+#include "async_query.h"
+
 
 namespace telling
 {
@@ -24,21 +26,20 @@ namespace telling
 
 
 		/*
-			Non-blocking client socket for requests.
-				Supports multiple pending requests.
-				Requests are handled with std::future.
+			Request communicator that calls an AsyncQuery delegate.
 		*/
-		class Request : public Req_Base
+		class Req_Async : public Req_Base
 		{
 		public:
-			explicit Request()           : Req_Base() {}
-			Request(const Request &o)    : Req_Base(o) {}
-			~Request();
+			Req_Async(std::shared_ptr<AsyncQuery> p)                       : _delegate(p), Req_Base() {}
+			Req_Async(std::shared_ptr<AsyncQuery> p, const Req_Base &o)    : _delegate(p), Req_Base(o) {}
+			~Req_Async();
 
 			/*
-				Send a request to the server.
+				Initiate a request.
+					May fail, throwing nng::exception.
 			*/
-			std::future<nng::msg> request(nng::msg &&msg);
+			QueryID makeRequest(nng::msg &&msg);
 
 
 			/*
@@ -49,6 +50,8 @@ namespace telling
 
 
 		protected:
+			std::shared_ptr<AsyncQuery> _delegate;
+
 			enum ACTION_STATE
 			{
 				IDLE = 0,
@@ -60,20 +63,44 @@ namespace telling
 			{
 				friend class Request;
 
-				Request* const         request;
+				Req_Async* const       request;
 				nng::aio               aio;
 				nng::ctx               ctx;
 				ACTION_STATE           state;
-				std::promise<nng::msg> promise;
+				//std::promise<nng::msg> promise;
+
+				QueryID queryID() const noexcept    {return ctx.get().id;}
 
 				static void _callback(void*);
 			};
 
 			friend struct Action;
-			std::mutex                              mtx;
-			//robin_hood::unordered_flat_set<Action*> active;
-			std::unordered_set<Action*>             active;
-			std::deque<Action*>                     idle;
+			std::mutex                  mtx;
+			std::unordered_set<Action*> active;
+			std::deque<Action*>         idle;
+		};
+
+
+		/*
+			Non-blocking client socket for requests.
+				Supports multiple pending requests.
+				Requests are handled with std::future.
+		*/
+		class Req_Box : public Req_Async
+		{
+		public:
+			explicit Req_Box();
+			Req_Box(const Req_Base &o);
+			~Req_Box();
+
+			/*
+				Send a request to the server.
+			*/
+			std::future<nng::msg> request(nng::msg &&msg);
+
+
+		protected:
+			class Delegate;
 		};
 	}
 }

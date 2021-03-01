@@ -15,7 +15,7 @@ namespace telling
 	public:
 		client::Subscribe_Box subscriber;
 		client::Push_Box      pusher;
-		client::Request       requester;
+		client::Request_Box   requester;
 
 
 	public:

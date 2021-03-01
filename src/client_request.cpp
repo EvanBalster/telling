@@ -1,4 +1,4 @@
-#include <iostream>
+#include <unordered_map>
 
 #include <telling/client_request.h>
 #include <nngpp/protocol/req0.h>
@@ -12,7 +12,7 @@ using namespace telling::client;
 	Request implementation
 */
 
-size_t Request::countUnsent()
+size_t Req_Async::countUnsent()
 {
 	std::lock_guard<std::mutex> g(mtx);
 
@@ -20,7 +20,7 @@ size_t Request::countUnsent()
 	for (auto &i : active) if (i->state == SEND) ++n;
 	return n;
 }
-size_t Request::countSentAwaitingReply()
+size_t Req_Async::countSentAwaitingReply()
 {
 	std::lock_guard<std::mutex> g(mtx);
 
@@ -29,7 +29,7 @@ size_t Request::countSentAwaitingReply()
 	return n;
 }
 
-Request::~Request()
+Req_Async::~Req_Async()
 {
 	// Cancel all active AIO
 	{
@@ -56,7 +56,7 @@ Request::~Request()
 	}
 }
 
-std::future<nng::msg> Request::request(nng::msg &&msg)
+QueryID Req_Async::makeRequest(nng::msg &&msg)
 {
 	if (!isReady())
 		throw nng::exception(nng::error::closed, "Push Communicator is not ready.");
@@ -78,32 +78,87 @@ std::future<nng::msg> Request::request(nng::msg &&msg)
 			action = idle.front();
 			idle.pop_front();
 		}
-		
-		action->state = SEND;
-		active.insert(action);
+
+		auto directive = _delegate->asyncQuery_made(action->queryID(), msg);
+
+		switch (directive)
+		{
+		case AsyncOp::DECLINE:
+		case AsyncOp::TERMINATE:
+			idle.push_front(action);
+			action = nullptr;
+			throw nng::exception(nng::error::canceled,
+				"AsyncQuery declined the message.");
+			break;
+
+		case AsyncOp::AUTO:
+		case AsyncOp::CONTINUE:
+		case AsyncOp::INITIATE:
+		default:
+			action->state = SEND;
+			active.insert(action);
+			break;
+		}
 	};
 
 	// Prepare send
 	action->aio.set_msg(std::move(msg));
 	action->ctx.send(action->aio);
 
-	return action->promise.get_future();
+	return action->queryID();
 }
 
-void Request::Action::_callback(void *_action)
+void Req_Async::Action::_callback(void *_action)
 {
-	auto action = static_cast<Request::Action*>(_action);
+	auto action = static_cast<Req_Async::Action*>(_action);
+	auto comm = action->request;
+	auto &delegate = comm->_delegate;
 
-	// Halt?
-	bool ok = false;
-	switch (auto err = action->aio.result())
+	AsyncOp::DIRECTIVE directive;
+
+	// Errors?
+	auto error = action->aio.result();
+	switch (error)
 	{
 	case nng::error::success:  break;
 	case nng::error::canceled:
 	case nng::error::timedout:
 	default:
 		// Causes the query to be canceled.
-		std::cout << "[REQ client AIO " << nng::to_string(err) << "]\n" << std::flush;
+		directive = delegate->asyncQuery_error(action->queryID(), error);
+		break;
+	}
+
+	// Deliver callbacks
+	switch (action->state)
+	{
+	case SEND:
+		// Send
+		directive = delegate->asyncQuery_sent(action->queryID());
+		break;
+	case RECV:
+		// Receive the response
+		directive = delegate->asyncQuery_done(action->queryID(), action->aio.release_msg());
+	default:
+	case IDLE:
+		// Shouldn't happen???
+		break;
+	}
+
+	std::lock_guard<std::mutex> lock(comm->mtx);
+
+	if (error != nng::error::success)
+	{
+		action->state = IDLE;
+	}
+	else switch (directive)
+	{
+	case AsyncOp::AUTO:
+	case AsyncOp::INITIATE:
+	case AsyncOp::CONTINUE:
+		break;
+	case AsyncOp::DECLINE:
+	case AsyncOp::TERMINATE:
 		action->state = IDLE;
 		break;
 	}
@@ -118,9 +173,7 @@ void Request::Action::_callback(void *_action)
 
 	case RECV:
 		// Message has been received; fulfill promise and return to action pool.
-		action->promise.set_value(nng::msg(action->aio.get_msg().get()));
 		action->aio.set_msg(nullptr);
-		std::cout << "[REQ client AIO finished]\n" << std::flush;
 		[[fallthrough]];
 
 	default:
@@ -128,12 +181,112 @@ void Request::Action::_callback(void *_action)
 		[[fallthrough]];
 
 	case IDLE:
-		// Release the promise, abandoning it if the operation was canceled or timed out.
-		action->promise = std::promise<nng::msg>();
-
 		// Move action to idle queue
-		std::lock_guard<std::mutex> lock(action->request->mtx);
-		action->request->active.erase(action);
-		action->request->idle.push_back(action);
+		comm->active.erase(action);
+		comm->idle.push_back(action);
 	}	
+}
+
+
+
+/*
+	Box implementation
+*/
+
+
+class Req_Box::Delegate : public AsyncQuery
+{
+public:
+	struct Pending
+	{
+		bool                   sent = false;
+		std::promise<nng::msg> promise;
+	};
+
+	std::mutex                           mtx;
+	std::unordered_map<QueryID, Pending> pending;
+
+	QueryID newQueryID = 0;
+
+	Delegate() {}
+	~Delegate() {}
+
+
+	std::future<nng::msg> getFuture(QueryID qid)
+	{
+		std::lock_guard g(mtx);
+
+		auto pos = pending.find(qid);
+
+		if (qid != newQueryID || pos == pending.end())
+			throw nng::exception(nng::error::internal, "Inconsistent Query ID");
+		newQueryID = 0;
+
+		return pos->second.promise.get_future();
+	}
+
+	
+	Directive asyncQuery_made (QueryID qid, const nng::msg &query) final
+	{
+		// TODO could more cheaply allocate nng::msg?
+		std::lock_guard g(mtx);
+		pending.emplace(qid, Pending{});
+		newQueryID = qid;
+
+		return CONTINUE;
+	}
+	Directive asyncQuery_sent (QueryID qid)                        final
+	{
+		return CONTINUE;
+	}
+	Directive asyncQuery_done (QueryID qid, nng::msg &&response)   final
+	{
+		std::lock_guard g(mtx);
+
+		auto pos = pending.find(qid);
+		if (pos != pending.end())
+		{
+			pos->second.promise.set_value(std::move(response));
+			pending.erase(pos);
+			return CONTINUE;
+		}
+		else
+		{
+			return DECLINE;
+		}
+	}
+	Directive asyncQuery_error(QueryID qid, nng::error status)     final
+	{
+		std::lock_guard g(mtx);
+		auto pos = pending.find(qid);
+		if (pos != pending.end())
+		{
+			pos->second.promise.set_exception(std::make_exception_ptr(
+				nng::exception(status, pos->second.sent
+					? "Request could not be fulfilled."
+					: "Request could not be sent.")));
+			pending.erase(pos);
+		}
+
+		return TERMINATE;
+	}
+};
+
+
+Req_Box::Req_Box() :
+	Req_Async(std::make_shared<Delegate>())
+{
+}
+Req_Box::Req_Box(const Req_Base &o) :
+	Req_Async(std::make_shared<Delegate>(), o)
+{
+}
+Req_Box::~Req_Box()
+{
+}
+
+std::future<nng::msg> Req_Box::request(nng::msg &&msg)
+{
+	auto qid = this->makeRequest(std::move(msg));
+	return static_cast<Delegate*>(&*_delegate)->getFuture(qid);
 }

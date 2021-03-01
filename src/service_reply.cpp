@@ -167,9 +167,20 @@ void Rep_Async::_aioSent(void *_comm)
 }
 
 
+/*
+	Box implementation
+*/
+
+
 class Rep_Box::Delegate : public AsyncRespond
 {
 public:
+	struct Pending
+	{
+		QueryID  id;
+		nng::msg msg;
+	};
+
 	RecvQueueMtx_<Pending> inbox;
 
 	Delegate() {}
@@ -215,7 +226,7 @@ bool Rep_Box::receive(nng::msg  &request)
 
 	auto delegate = reinterpret_cast<Delegate*>(&*_delegate);
 
-	Pending front;
+	Delegate::Pending front;
 	if (delegate->inbox.pull(front))
 	{
 		current_query = front.id;

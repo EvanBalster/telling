@@ -23,7 +23,7 @@ namespace telling
 
 
 		/*
-			Non-blocking service socket for replying to requests.
+			Reply communicator that calls an AsyncRespond delegate.
 		*/
 		class Rep_Async :
 			public Rep_Base
@@ -41,14 +41,14 @@ namespace telling
 
 
 		protected:
+			std::shared_ptr<AsyncRespond> _delegate;
+
 			struct OutboxItem
 			{
 				nng::ctx ctx;
 				nng::msg msg;
 			};
 			using Unresponded = std::unordered_set<QueryID>;
-
-			std::shared_ptr<AsyncRespond> _delegate;
 
 			std::mutex  unresponded_mtx;
 			Unresponded unresponded;
@@ -93,13 +93,6 @@ namespace telling
 
 		protected:
 			class Delegate;
-			friend class Delegate;
-
-			struct Pending
-			{
-				QueryID  id;
-				nng::msg msg;
-			};
 
 			QueryID current_query = 0;
 		};
