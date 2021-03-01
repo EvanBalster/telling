@@ -24,13 +24,14 @@ Server::Reply::Reply() :
 }
 Server::Reply::~Reply()
 {
-	std::cout << __FUNCTION__ << " start" << std::endl;
-
 	// Disconnect delegates
 	delegate_reply  ->stop();
 	delegate_request->stop();
 
-	std::cout << __FUNCTION__ << ": close sockets " << std::endl;
+	// Close reply socket (halting further activity)
+	reply_int.close();
+
+	// TODO possible deadlock closing these sockets?
 
 	// Close sockets (before joining device)
 	request_dvc.close();
@@ -38,8 +39,6 @@ Server::Reply::~Reply()
 
 	// Join device.
 	thread_device.join();
-
-	std::cout << __FUNCTION__ << " end" << std::endl;
 }
 
 void Server::Reply::run_device(Reply *reply)

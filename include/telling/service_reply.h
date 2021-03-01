@@ -1,10 +1,11 @@
 #pragma once
 
 
-#include <deque>
+#include <unordered_set>
 #include <mutex>
 #include "io_queue.h"
 #include "socket.h"
+#include "async_query.h"
 
 
 namespace telling
@@ -24,12 +25,55 @@ namespace telling
 		/*
 			Non-blocking service socket for replying to requests.
 		*/
-		class Reply : public Rep_Base
+		class Rep_Async :
+			public Rep_Base
 		{
 		public:
-			explicit Reply()         : Rep_Base()     {_onOpen();}
-			Reply(const Reply &o)    : Rep_Base(o)    {_onOpen();}
-			~Reply();
+			Rep_Async(std::shared_ptr<AsyncRespond> p)                       : Rep_Base() , _delegate(p)    {_init();}
+			Rep_Async(std::shared_ptr<AsyncRespond> p, const Rep_Base &o)    : Rep_Base(o), _delegate(p)    {_init();}
+			~Rep_Async();
+
+
+			/*
+				Send a response to a specific outstanding query.
+			*/
+			void respondTo(QueryID, nng::msg &&msg);
+
+
+		protected:
+			struct OutboxItem
+			{
+				nng::ctx ctx;
+				nng::msg msg;
+			};
+			using Unresponded = std::unordered_set<QueryID>;
+
+			std::shared_ptr<AsyncRespond> _delegate;
+
+			std::mutex  unresponded_mtx;
+			Unresponded unresponded;
+
+			nng::aio                  aio_send, aio_recv;
+			SendQueueMtx_<OutboxItem> outbox;
+			
+			nng::ctx ctx_aio_recv, ctx_aio_send;
+
+			void _init();
+			static void _aioReceived(void*);
+			static void _aioSent    (void*);
+		};
+
+
+
+		/*
+			Non-blocking service socket for replying to requests.
+		*/
+		class Rep_Box : public Rep_Async
+		{
+		public:
+			explicit Rep_Box();
+			Rep_Box(const Rep_Base &shareSocket);
+			~Rep_Box();
 
 			/*
 				Requests should be processed one-by-one.
@@ -43,29 +87,21 @@ namespace telling
 			/*
 				Automatically loop through requests and reply to them with a functor.
 			*/
-			template<class Fn>
-			void respond_all(Fn fn)           {nng::msg req; while (receive(req)) respond(fn(req));}
-			template<class Fn, class A>
-			void respond_all(Fn fn, A arg)    {nng::msg req; while (receive(req)) respond(fn(arg, req));}
+			template<class Fn>                 void respond_all(Fn fn)                  {nng::msg req; while (receive(req)) respond(fn(req));}
+			template<class Fn, class UserData> void respond_all(Fn fn, UserData arg)    {nng::msg req; while (receive(req)) respond(fn(arg, req));}
 
 
 		protected:
+			class Delegate;
+			friend class Delegate;
+
 			struct Pending
 			{
-				nng::ctx ctx;
+				QueryID  id;
 				nng::msg msg;
 			};
 
-			nng::aio               aio_send, aio_recv;
-			RecvQueueMtx_<Pending> inbox;
-			SendQueueMtx_<Pending> outbox;
-			
-			nng::ctx ctx_aio_recv, ctx_aio_send;
-			nng::ctx ctx_api_received;
-
-			void _onOpen();
-			static void _aioReceived(void*);
-			static void _aioSent    (void*);
+			QueryID current_query = 0;
 		};
 	}
 

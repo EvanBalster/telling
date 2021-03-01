@@ -17,7 +17,7 @@ namespace telling
 
 		HostAddress::Base address() const    {return HostAddress::Base::InProc(uri);}
 
-		service::Reply       replier;
+		service::Reply_Box   replier;
 		service::Pull_Box    puller;
 		service::Publish_Box publisher;
 

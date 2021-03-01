@@ -1,9 +1,6 @@
 #pragma once
 
 
-#include <iostream>
-
-
 #include <memory>
 #include <nngpp/aio.h>
 
@@ -24,7 +21,7 @@ namespace telling
 			// Refrain from processing a message.  Communications continue.
 			DECLINE   = 2,
 
-			// (Re-)Initiate communications.
+			// (Re-)Initiate communications.  Often synonymous with Continue.
 			INITIATE  = 3,
 
 			// Stop communications, canceling any which are in progress.
@@ -36,6 +33,8 @@ namespace telling
 			const DIRECTIVE directive;
 
 			Directive(DIRECTIVE d)     : directive(d) {}
+
+			operator DIRECTIVE() const noexcept    {return directive;}
 		};
 
 		struct SendDirective
@@ -121,7 +120,7 @@ namespace telling
 
 		/*
 			asyncSend has concurrency responsibilities.
-				"msg" should either enqueue the message if another is sending or return it if not.
+				"msg" should enqueue the message if another is sending or return it if not.
 				"sent" notifies that one message has finished sending.
 		*/
 		virtual SendDirective asyncSend_msg  (nng::msg &&msg)       = 0;
@@ -159,68 +158,6 @@ namespace telling
 			std::shared_ptr<AsyncSend> _send_delegate;
 		};
 	};
-
-
-#if 0
-	/*
-		Callback interface for sending queries and getting responses.
-			Used for REQuest protocol, maybe Surveyor in the future.
-	*/
-	class AsyncQuery : public AsyncOp
-	{
-	public:
-		using QueryID = uint32_t;
-
-		struct Query
-		{
-			AsyncQuery *delegate;
-			QueryID     queryID;
-			nng::aio    aio;
-			nng::ctx    ctx;
-		};
-
-
-	public:
-		virtual ~AsyncQuery() {}
-
-		/*
-			asyncSend has concurrency responsibilities.
-				"msg" should either enqueue the message if another is sending or return it if not.
-				"sent" notifies that one message has finished sending.
-		*/
-		virtual SendDirective asyncQuery_made (Query&&, nng::msg&&) = 0;
-		virtual SendDirective asyncQuery_sent (QueryID)             = 0;
-		virtual Directive     asyncQuery_reply(Query&,  nng::msg&&) = 0;
-		virtual SendDirective asyncQuery_error(Query&,  nng::error status)    {return TERMINATE;}
-		virtual void          asyncQuery_stop (nng::error status)    {}
-
-
-	public:
-		/*
-			Optional base class for AIO sender that calls an AsyncSend object.
-		*/
-		template<class T_SendCtx>
-		class Operator
-		{
-		public:
-			Operator(T_SendCtx &&_ctx, std::shared_ptr<AsyncSend> _delegate);
-			~Operator();
-
-		protected:
-			/*
-				send_msg will return false if the delegate refuses.
-				send_stop halts sending.
-			*/
-			bool send_msg(nng::msg &&msg);
-			void send_stop();
-
-			nng::aio                   _send_aio;
-			T_SendCtx                  _send_ctx;
-			std::shared_ptr<AsyncSend> _send_delegate;
-		};
-	};
-#endif
-
 
 
 	/*

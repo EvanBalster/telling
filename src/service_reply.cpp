@@ -10,7 +10,7 @@ using namespace telling::service;
 	Reply implementation
 */
 
-void Reply::_onOpen()
+void Rep_Async::_init()
 {
 	ctx_aio_recv = make_ctx();
 
@@ -18,66 +18,112 @@ void Reply::_onOpen()
 	aio_recv = nng::make_aio(&_aioReceived, this);
 	ctx_aio_recv.recv(aio_recv);
 }
-Reply::~Reply()
+Rep_Async::~Rep_Async()
 {
+	for (auto id : unresponded)
+	{
+		// Evil unpickling
+		nng_ctx ctx = {id};
+		nng_ctx_close(ctx);
+	}
 	aio_send.stop();
 	aio_recv.stop();
 	aio_send = nng::aio();
 	aio_recv = nng::aio();
 }
 
-void Reply::_aioReceived(void *_comm)
+void Rep_Async::_aioReceived(void *_comm)
 {
-	auto comm = static_cast<Reply*>(_comm);
+	auto comm = static_cast<Rep_Async*>(_comm);
+	auto &ctx = comm->ctx_aio_recv;
+	auto queryID = ctx.get().id;
 
-	// Halt?
-	switch (comm->aio_recv.result())
+	AsyncOp::DIRECTIVE directive = AsyncOp::TERMINATE;
+
+	bool await_delayed_response = false;
+
+	// Call delegate
+	auto error = comm->aio_recv.result();
+	switch (error)
 	{
-	case nng::error::success:  break;
+	case nng::error::success:
+		{
+			AsyncOp::SendDirective react = comm->_delegate->asyncRespond_recv(
+				queryID, std::move(comm->aio_recv.release_msg()));
+			directive = react.directive;
+
+			if (react.sendMsg)
+			{
+				// Immediate response
+				comm->respondTo(queryID, std::move(react.sendMsg));
+
+				// Dispose of context
+				ctx = nng::ctx();
+			}
+			else
+			{
+				// Delayed response, decline or terminate...
+				await_delayed_response = true;
+			}
+		}
+		break;
 	case nng::error::canceled:
 	case nng::error::timedout:
-	default:                   return;
+	default:
+		directive = comm->_delegate->asyncRespond_error(
+			ctx.get().id, error);
+		break;
 	}
 
-	// Add message to queue.
-	comm->inbox.push(Pending{
-		std::move(comm->ctx_aio_recv),
-		std::move(comm->aio_recv.release_msg())});
+	// Handle directive...
+	switch (directive)
+	{
+	default:
+	case AsyncOp::AUTO:
+		if (error != nng::error::success)
+		{
+		case AsyncOp::TERMINATE:
+			// Stop receiving messages
+			return;
+		}
 
-	// Receive another message, creating a fresh context.
-	comm->ctx_aio_recv = nng::make_ctx(comm->socketView());
-	comm->ctx_aio_recv.recv(comm->aio_recv);
+		[[fallthrough]];
+	case AsyncOp::CONTINUE:
+	case AsyncOp::INITIATE:
+		if (await_delayed_response)
+		{
+			// Evil pickling
+			std::lock_guard g(comm->unresponded_mtx);
+			comm->unresponded.emplace(queryID);
+			reinterpret_cast<nng_ctx&>(ctx).id = 0;
+		}
+
+		[[fallthrough]];
+	case AsyncOp::DECLINE:
+		// Receive another message with a fresh context
+		ctx = nng::make_ctx(comm->socketView());
+		ctx.recv(comm->aio_recv);
+	}
 }
 
-bool Reply::receive(nng::msg  &request)
-{
-	if (ctx_api_received)
-		throw nng::exception(nng::error::state,
-			"Reply: must reply before receiving a new message.");
-
-	Pending front;
-	if (inbox.pull(front))
-	{
-		ctx_api_received = std::move(front.ctx);
-		request          = std::move(front.msg);
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
-
-void Reply::respond(nng::msg &&msg)
+void Rep_Async::respondTo(QueryID queryID, nng::msg &&msg)
 {
 	if (!isReady())
-		throw nng::exception(nng::error::closed, "Push Communicator is not ready.");
+		throw nng::exception(nng::error::closed, "Reply Communicator is not ready.");
 
-	if (!ctx_api_received)
-		throw nng::exception(nng::error::state,
-			"Reply: must receive a request before replying.");
+	// Make sure this queryID is awaiting a response
+	{
+		std::lock_guard g(unresponded_mtx);
+		if (unresponded.erase(queryID) == 0)
+			throw nng::exception(nng::error::inval,
+				"respondTo: no outstanding request with this queryID");
+	}
 
-	Pending to_send = {std::move(ctx_api_received), std::move(msg)};
+	// Evil unpickling
+	nng_ctx _ctx = {queryID};
+
+	// Send or enqueue the reply.
+	OutboxItem to_send = {nng::ctx(_ctx), std::move(msg)};
 	if (outbox.produce(std::move(to_send)))
 	{
 		// AIO processing continues
@@ -91,9 +137,9 @@ void Reply::respond(nng::msg &&msg)
 	}
 }
 
-void Reply::_aioSent(void *_comm)
+void Rep_Async::_aioSent(void *_comm)
 {
-	auto comm = static_cast<Reply*>(_comm);
+	auto comm = static_cast<Rep_Async*>(_comm);
 
 	// Halt?
 	switch (comm->aio_send.result())
@@ -105,7 +151,7 @@ void Reply::_aioSent(void *_comm)
 	}
 
 	{
-		Pending next;
+		OutboxItem next;
 		if (comm->outbox.consume(next))
 		{
 			// Transmit another message
@@ -117,5 +163,84 @@ void Reply::_aioSent(void *_comm)
 		{
 			// AIO sequence completes
 		}
+	}
+}
+
+
+class Rep_Box::Delegate : public AsyncRespond
+{
+public:
+	RecvQueueMtx_<Pending> inbox;
+
+	Delegate() {}
+	~Delegate() {}
+
+	SendDirective asyncRespond_recv(QueryID qid, nng::msg &&query) final
+	{
+		inbox.push(Pending{qid, std::move(query)});
+		return CONTINUE;
+	}
+	void asyncRespond_done(QueryID qid) final
+	{
+	}
+	Directive asyncRespond_error(QueryID qid, nng::error status) final
+	{
+		return TERMINATE;
+	}
+};
+
+
+Rep_Box::Rep_Box() :
+	Rep_Async(std::make_shared<Delegate>())
+{
+
+}
+Rep_Box::Rep_Box(const Rep_Base &shareSocket) :
+	Rep_Async(std::make_shared<Delegate>(), shareSocket)
+{
+}
+Rep_Box::~Rep_Box()
+{
+}
+
+
+bool Rep_Box::receive(nng::msg  &request)
+{
+	if (!isReady())
+		throw nng::exception(nng::error::closed, "Reply Communicator is not ready.");
+
+	if (current_query != 0)
+		throw nng::exception(nng::error::state,
+			"Reply: must reply before receiving a new message.");
+
+	auto delegate = reinterpret_cast<Delegate*>(&*_delegate);
+
+	Pending front;
+	if (delegate->inbox.pull(front))
+	{
+		current_query = front.id;
+		request       = std::move(front.msg);
+		return true;
+	}
+	else return false;
+}
+
+void Rep_Box::respond(nng::msg &&msg)
+{
+	if (!isReady())
+		throw nng::exception(nng::error::closed, "Reply Communicator is not ready.");
+
+	if (current_query == 0)
+		throw nng::exception(nng::error::state,
+			"Reply: must receive a request before replying.");
+
+	try
+	{
+		respondTo(current_query, std::move(msg));
+		current_query = 0;
+	}
+	catch (nng::exception e)
+	{
+		throw e;
 	}
 }

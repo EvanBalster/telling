@@ -201,17 +201,10 @@ Server::Route::Route(Server &_server, std::string _path) :
 }
 Server::Route::~Route()
 {
-	std::cout << __FUNCTION__ << " start" << std::endl;
-
-	if (!halted) try
+	if (!halted)
 	{
 		std::lock_guard<std::mutex> g(mtx);
 		halted = true;
-	}
-	catch (std::exception e)
-	{
-		std::cout << "~Route mutex exception (possible deadlock averted): " << e.what() << std::endl;
-		std::cout << std::endl;
 	}
 
 	req.close();
@@ -219,8 +212,6 @@ Server::Route::~Route()
 
 	req_send.send_stop();
 	req_recv.recv_stop();
-
-	std::cout << __FUNCTION__ << " end" << std::endl;
 }
 
 void Server::Route::dial(const HostAddress::Base &base)
