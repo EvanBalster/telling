@@ -6,6 +6,8 @@
 #include <unordered_map>
 
 #include <nngpp/nngpp.h>
+
+#include "async.h"
 #include "host_address.h"
 
 
@@ -235,6 +237,30 @@ namespace telling
 
 
 	/*
+		A socket which delivers pipe events to an AsyncOp.
+	*/
+	class Socket_withPipeEvents : public Socket
+	{
+	public:
+		Socket_withPipeEvents(
+			std::shared_ptr<AsyncOp_withPipeEvents> _op,
+			ROLE    _role,
+			PATTERN _pattern,
+			VARIANT _variant = STANDARD) :
+			Socket(_role, _pattern, _variant),
+			op(std::move(_op)) {}
+
+		~Socket_withPipeEvents() {}
+
+
+	protected:
+		void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) override
+			{op->pipeEvent(pipe, event);}
+
+		std::shared_ptr<AsyncOp_withPipeEvents> op;
+	};
+
+	/*
 		Utility base class for sockets adhering to a certain pattern.
 	*/
 	template<ROLE T_Role, PATTERN T_Pattern>
@@ -243,6 +269,15 @@ namespace telling
 	public:
 		explicit Pattern_Base()                           : Communicator(T_Role, T_Pattern) {}
 		Pattern_Base(const Pattern_Base &shareSocket)     : Communicator(shareSocket)     {}
+
+		/*
+			Construct a Communicator around a pipe event handler.
+				Only ONE pipe handler per socket will actually receive events.
+				AsyncOps based on communicators sharing the socket won't get pipe events.
+		*/
+		Pattern_Base(std::shared_ptr<AsyncOp_withPipeEvents> op) :
+			Communicator(std::make_shared<Socket_withPipeEvents>(std::move(op), T_Role, T_Pattern)) {}
+
 		~Pattern_Base() {}
 	};
 

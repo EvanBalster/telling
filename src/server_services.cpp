@@ -7,15 +7,67 @@ using namespace telling;
 using std::endl;
 
 
+class Server::Services::EnlistResponder : public AsyncRespond
+{
+public:
+	std::mutex mtx;
+	Services *services;
+
+	EnlistResponder(Services *_services) : services(_services) {}
+
+
+	SendDirective asyncRespond_recv(QueryID qid, nng::msg &&query)  final
+	{
+		std::lock_guard gSelf(mtx);
+		if (!services) return TERMINATE;
+
+		return services->enlistRequest(qid, std::move(query));
+	}
+	void asyncRespond_done(QueryID qid) final
+	{
+		std::lock_guard gSelf(mtx);
+		if (!services) return;
+
+		//std::lock_guard g(services->mtx);
+	}
+	Directive asyncRespond_error(QueryID qid, nng::error status) final
+	{
+		std::lock_guard gSelf(mtx);
+		if (!services) return TERMINATE;
+
+		services->server()->log << services->Name()
+			<< ": Enlistment Responder error: " << nng::to_string(status) << std::endl;
+		return AsyncOp::AUTO;
+	}
+
+	void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) final
+	{
+		std::lock_guard gSelf(mtx);
+		if (!services) return;
+
+		if (event == nng::pipe_ev::rem_post)
+		{
+			services->enlistExpired(pipe);
+		}
+	}
+
+	void stop()
+	{
+		std::lock_guard gSelf(mtx);
+		services = nullptr;
+	}
+};
+
+
 Server::Services::Services() :
-	subscribe(subscribe_delegate = std::make_shared<Delegate_Sub>(this))
+	enlist_responder(std::make_shared<EnlistResponder>(this)),
+	enlist_reply(enlist_responder)
 {
 	map.burst_threshold(256);
 
 
-	// Subscribe to *services and dial into internal address
-	subscribe.subscribe("*services");
-	subscribe.dial(server()->address_internal);
+	// Responders may dial
+	enlist_reply.listen(server()->address_services);
 
 
 	// Start management thread
@@ -24,7 +76,7 @@ Server::Services::Services() :
 
 Server::Services::~Services()
 {
-	if (subscribe_delegate) subscribe_delegate->stop();
+	if (enlist_responder) static_cast<EnlistResponder*>(&*enlist_responder)->stop();
 
 	{
 		// Shut down management thread
@@ -36,16 +88,26 @@ Server::Services::~Services()
 	management.thread.join();
 }
 
-AsyncOp::Directive Server::Services::receive_error(Delegate_Sub  *, nng::error error)
-{
-	server()->log << Name() << ": Subscribe ingestion error: " << nng::to_string(error) << std::endl;
-	return AsyncOp::AUTO;
-}
-
-AsyncOp::Directive Server::Services::received(const MsgView::Bulletin &msg, nng::msg &&_ignored)
+AsyncOp::SendDirective Server::Services::enlistRequest(QueryID queryID, nng::msg &&_msg)
 {
 	auto server = this->server();
 	auto &log = server->log;
+
+
+	nng::msg owned_msg = std::move(_msg);
+	MsgView::Request msg;
+	try
+	{
+		msg = MsgView::Request(owned_msg);
+	}
+	catch (MsgException e)
+	{
+		log << Name() << ": message parse exception: " << e.what() << std::endl;
+
+		auto writer = MsgWriter::Reply(HttpStatus::Code::BadRequest);
+		writer.writeData("Could not parse request.");
+		return writer.release();
+	}
 
 	/*
 		Accept only services message with status 200
@@ -55,13 +117,6 @@ AsyncOp::Directive Server::Services::received(const MsgView::Bulletin &msg, nng:
 	{
 		// Don't understand this message
 		log << Name() << ": did not recognize URI `" << msg.uri << "`" << endl;
-		return AsyncOp::DECLINE;
-	}
-
-	if (msg.statusString[0] != '2')
-	{
-		// Don't understand
-		log << Name() << ": ignoring bulletin with status `" << msg.statusString << "`" << endl;
 		return AsyncOp::DECLINE;
 	}
 
@@ -76,6 +131,7 @@ AsyncOp::Directive Server::Services::received(const MsgView::Bulletin &msg, nng:
 	auto pathPrefix = detail::ConsumeLine(pi, pe);
 	auto configLine = detail::ConsumeLine(pi, pe);
 
+	// Body parse failure
 	if (pi != pe)
 	{
 		log << Name() << ": invalid dial-in." << endl
@@ -86,37 +142,61 @@ AsyncOp::Directive Server::Services::received(const MsgView::Bulletin &msg, nng:
 			log << "\t: additional unrecognized data: `"
 				<< std::string_view(pi, pe-pi) << "`" << endl;
 		}
-		return AsyncOp::DECLINE;
+
+		auto writer = MsgWriter::Reply(HttpStatus::Code::BadRequest);
+		writer.writeData("Malformed Enlistment Request Body.");
+		return writer.release();
 	}
 
 
 	std::lock_guard<std::mutex> g(mtx);
 
+	// Add to enlistment map
+	auto pipeID = owned_msg.get_pipe().get().id;
+	enlistmentMap.emplace(pipeID, pathPrefix);
 
 	/*
 		Kick off establishment of a new Route.
 	*/
 	auto baseAddress = HostAddress::Base::InProc(pathPrefix);
 
-	management.route_open.emplace_back(NewRoute{std::string(pathPrefix), baseAddress});
+	management.route_open.emplace_back(NewRoute{queryID, pipeID, std::string(pathPrefix), baseAddress});
 	management.cond.notify_one();
 
 	return AsyncOp::CONTINUE;
 }
 
-void Server::Services::disconnected(Route *route)
+void Server::Services::enlistExpired(nng::pipe_view pipe)
 {
 	auto server = this->server();
 	auto &log = server->log;
 
-	log << Name() << ": drop `" << route->path << "`..." << endl;
+	auto pipeID = pipe.get().id;
+
+	log << Name() << ": disconnect #" << pipeID << " ";
 
 	std::lock_guard<std::mutex> g(mtx);
 
-	auto pos = map.find(route->path);
+	std::string path;
+	{
+		auto pipe_pos = enlistmentMap.find(pipeID);
+		if (pipe_pos == enlistmentMap.end())
+		{
+			log << "... not enlisted." << endl;
+			enlistmentMap.erase(pipe_pos);
+			return;
+		}
+		log << "`" << pipe_pos->second << "`... " << endl;;
+
+		path = std::move(pipe_pos->second);
+		enlistmentMap.erase(pipe_pos);
+	}
+
+	auto pos = map.find(path);
 	if (pos != map.end())
 	{
-		auto n = map.erase(route->path);
+		Route *route = *pos;
+		auto n = map.erase(pos);
 		management.route_close.push_back(route);
 		management.cond.notify_one();
 	}
@@ -156,6 +236,17 @@ void Server::Services::run_management_thread()
 			{
 				// Consider possibility of race condition if service is torn down and re-established.
 				log << Name() << ": already have `" << spec.map_uri << "`" << endl;
+
+				// Remove pipe
+				enlistmentMap.erase(spec.pipeID);
+
+				// Failed dialing... service unavailable
+				auto notify = MsgWriter::Reply(StatusCode::Conflict);
+				notify.writeHeader("Content-Type", "text/plain");
+				notify.writeData(std::string(spec.map_uri));
+				notify.writeData("\nThis URI is already enlisted.");
+				enlist_reply.respondTo(spec.queryID, notify.release());
+
 				continue;
 			}
 
@@ -170,12 +261,6 @@ void Server::Services::run_management_thread()
 				Route &sockets = **map.emplace(spec.map_uri, new Route(*server, std::string(spec.map_uri))).first;
 				sockets.dial(spec.host);
 				log << " ...OK" << endl;
-
-				// Notify service of enrollment.
-				auto notify = MsgWriter::Request("*services");
-				notify.writeHeader("Content-Type", "text/plain");
-				notify.writeData("Enrolled successfully.");
-				sockets.sendPush(notify.release());
 			}
 			catch (nng::exception e)
 			{
@@ -183,7 +268,26 @@ void Server::Services::run_management_thread()
 					<< "\t" << e.what() << endl
 					<< "\tsource: " << e.who() << endl;
 				map.erase(spec.map_uri);
+				
+				// Remove pipe
+				enlistmentMap.erase(spec.pipeID);
+
+				// Failed dialing... service unavailable
+				auto notify = MsgWriter::Reply(StatusCode::ServiceUnavailable);
+				notify.writeHeader("Content-Type", "text/plain");
+				notify.writeData(std::string(spec.host.base));
+				notify.writeData("\nCould not dial specified service URI.");
+				enlist_reply.respondTo(spec.queryID, notify.release());
+
+				continue;
 			}
+
+			// Notify service of successful enrollment.
+			auto notify = MsgWriter::Reply();
+			notify.writeHeader("Content-Type", "text/plain");
+			notify.writeData(spec.map_uri);
+			notify.writeData("\nEnrolled with this URI.");
+			enlist_reply.respondTo(spec.queryID, notify.release());
 		}
 
 		management.cond.wait(lock);
@@ -218,16 +322,4 @@ void Server::Route::dial(const HostAddress::Base &base)
 {
 	req.dial(base);
 	push.dial(base);
-}
-
-void Server::Route::RequestRaw::pipeEvent(nng::pipe_view pipe, nng::pipe_ev event)
-{
-	std::lock_guard<std::mutex> g(route.mtx);
-
-	// Unregister service
-	if (event == nng::pipe_ev::rem_post && !route.halted)
-	{
-		route.halted = true;
-		route.server.services.disconnected(&route);
-	}
 }

@@ -56,7 +56,7 @@ Req_Async::~Req_Async()
 	}
 }
 
-QueryID Req_Async::makeRequest(nng::msg &&msg)
+QueryID Req_Async::request(nng::msg &&msg)
 {
 	if (!isReady())
 		throw nng::exception(nng::error::closed, "Push Communicator is not ready.");
@@ -93,7 +93,6 @@ QueryID Req_Async::makeRequest(nng::msg &&msg)
 
 		case AsyncOp::AUTO:
 		case AsyncOp::CONTINUE:
-		case AsyncOp::INITIATE:
 		default:
 			action->state = SEND;
 			active.insert(action);
@@ -154,7 +153,6 @@ void Req_Async::Action::_callback(void *_action)
 	else switch (directive)
 	{
 	case AsyncOp::AUTO:
-	case AsyncOp::INITIATE:
 	case AsyncOp::CONTINUE:
 		break;
 	case AsyncOp::DECLINE:
@@ -273,20 +271,12 @@ public:
 };
 
 
-Req_Box::Req_Box() :
-	Req_Async(std::make_shared<Delegate>())
-{
-}
-Req_Box::Req_Box(const Req_Base &o) :
-	Req_Async(std::make_shared<Delegate>(), o)
-{
-}
-Req_Box::~Req_Box()
-{
-}
+Req_Box::Req_Box()                     : Req_Async(std::make_shared<Delegate>()) {}
+Req_Box::Req_Box(const Req_Base &o)    : Req_Async(std::make_shared<Delegate>(), o) {}
+Req_Box::~Req_Box()                    {}
 
 std::future<nng::msg> Req_Box::request(nng::msg &&msg)
 {
-	auto qid = this->makeRequest(std::move(msg));
+	auto qid = this->Request_Async::request(std::move(msg));
 	return static_cast<Delegate*>(&*_delegate)->getFuture(qid);
 }

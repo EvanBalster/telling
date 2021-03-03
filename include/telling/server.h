@@ -22,6 +22,7 @@
 #include "client_push.h"
 #include "service_publish.h"
 #include "client_subscribe.h"
+#include "service_reply.h"
 
 
 namespace telling
@@ -81,12 +82,9 @@ namespace telling
 		{
 		public:
 			DelegateRecv(Module *_module) : module(_module) {}
-			~DelegateRecv() {} //{std::cout << __FUNCTION__ << std::endl;}
+			~DelegateRecv() {}
 			Directive asyncRecv_msg(nng::msg &&msg) override; // Below
 			Directive asyncRecv_error(nng::error error) override; // Below
-
-			//bool      asyncRecv_start()                  override     {std::cout << __FUNCTION__ << std::endl; return true;}
-			//void      asyncRecv_stop (nng::error status) override     {std::cout << __FUNCTION__ << " -- " << nng::to_string(status) << std::endl;}
 
 			void stop() {std::lock_guard<std::mutex> g(mtx); module = nullptr;}
 
@@ -127,7 +125,6 @@ namespace telling
 
 			protected:
 				Route &route;
-				void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) final;
 			};
 
 			RequestRaw       req;
@@ -140,10 +137,6 @@ namespace telling
 
 			std::mutex mtx;
 			bool halted = false;
-
-
-		private:
-			static void pipeCallback(nng_pipe, nng_pipe_ev, void*);
 		};
 
 
@@ -200,11 +193,15 @@ namespace telling
 		protected:
 			using Delegate_Sub = DelegateRecv<Services, MsgView::Bulletin>;
 
+			using PipeID = decltype(std::declval<nng_pipe>().id);
+
 			std::mutex         mtx;
 			PrefixMap<Route*>  map;
 
 			struct NewRoute
 			{
+				QueryID           queryID;
+				PipeID            pipeID;
 				std::string       map_uri;
 				HostAddress::Base host;
 			};
@@ -221,12 +218,15 @@ namespace telling
 
 			void run_management_thread();
 
-			std::shared_ptr<Delegate_Sub> subscribe_delegate;
-			client::Subscribe_Async       subscribe;
+			class EnlistResponder;
+			friend class EnlistResponder;
+			std::shared_ptr<AsyncRespond> enlist_responder;
+			service::Reply_Async          enlist_reply;
 
-			friend class Delegate_Sub;
-			AsyncOp::Directive received(const MsgView::Bulletin&, nng::msg&&);
-			AsyncOp::Directive receive_error(Delegate_Sub*, nng::error);
+			std::unordered_map<PipeID, std::string> enlistmentMap;
+
+			AsyncOp::SendDirective enlistRequest(QueryID, nng::msg &&);
+			void                   enlistExpired(nng::pipe_view);
 			
 
 			Route *route(std::string_view path)
@@ -234,11 +234,6 @@ namespace telling
 				auto pos = map.longest_prefix(path);
 				return (pos == map.end()) ? nullptr : &**pos;
 			}
-
-
-		private:
-			friend class Route;
-			void disconnected(Route *route);
 
 
 		public:

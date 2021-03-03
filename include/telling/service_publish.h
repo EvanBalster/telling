@@ -34,7 +34,7 @@ namespace telling
 			/*
 				Construct with an AsyncSend delegate.
 			*/
-			Pub_Async(std::shared_ptr<AsyncSend> p)                                  : Pub_Base(),            Operator(socketView(), p) {}
+			Pub_Async(std::shared_ptr<AsyncSend> p)                                  : Pub_Base(p),           Operator(socketView(), p) {}
 			Pub_Async(std::shared_ptr<AsyncSend> p, const Pub_Base &shareSocket)     : Pub_Base(shareSocket), Operator(socketView(), p) {}
 			~Pub_Async() {}
 

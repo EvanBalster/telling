@@ -89,7 +89,6 @@ void Rep_Async::_aioReceived(void *_comm)
 
 		[[fallthrough]];
 	case AsyncOp::CONTINUE:
-	case AsyncOp::INITIATE:
 		if (await_delayed_response)
 		{
 			// Evil pickling

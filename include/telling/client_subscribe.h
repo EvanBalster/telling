@@ -35,7 +35,7 @@ namespace telling
 				Construct with an AsyncRecv delegate.
 					Begins listening for messages immediately.
 			*/
-			Sub_Async(std::shared_ptr<AsyncRecv> p)                                  : Sub_Base(),            Operator(make_ctx(), p) {}
+			Sub_Async(std::shared_ptr<AsyncRecv> p)                                  : Sub_Base(p),           Operator(make_ctx(), p) {}
 			Sub_Async(std::shared_ptr<AsyncRecv> p, const Sub_Base &shareSocket)     : Sub_Base(shareSocket), Operator(make_ctx(), p) {}
 			~Sub_Async() {}
 

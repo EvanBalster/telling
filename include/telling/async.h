@@ -18,19 +18,16 @@ namespace telling
 			// Continue ongoing communications.
 			CONTINUE  = 1,
 
-			// Refrain from processing a message.  Communications continue.
+			// Discard a message but continue communications.
 			DECLINE   = 2,
 
-			// (Re-)Initiate communications.  Often synonymous with Continue.
-			INITIATE  = 3,
-
 			// Stop communications, canceling any which are in progress.
-			TERMINATE = 4,
+			TERMINATE = 3,
 		};
 
 		struct Directive
 		{
-			const DIRECTIVE directive;
+			DIRECTIVE directive;
 
 			Directive(DIRECTIVE d)     : directive(d) {}
 
@@ -39,11 +36,11 @@ namespace telling
 
 		struct SendDirective
 		{
-			const DIRECTIVE directive;
-			nng::msg        sendMsg;
+			DIRECTIVE directive;
+			nng::msg  sendMsg;
 
 			SendDirective(DIRECTIVE d)       : directive(d) {}
-			SendDirective(nng::msg &&msg)    : directive(INITIATE), sendMsg(std::move(msg)) {}
+			SendDirective(nng::msg &&msg)    : directive(AUTO), sendMsg(std::move(msg)) {}
 		};
 
 		struct QueryDirective
@@ -56,10 +53,22 @@ namespace telling
 
 
 	/*
+		Adds optional pipe events to async handlers.
+	*/
+	class AsyncOp_withPipeEvents : public AsyncOp
+	{
+	public:
+		virtual ~AsyncOp_withPipeEvents() {}
+
+		virtual void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) {}
+	};
+
+
+	/*
 		Callback interface for receiving messages.
 			Used for PULL and SUBscribe protocols.
 	*/
-	class AsyncRecv : public AsyncOp
+	class AsyncRecv : public AsyncOp_withPipeEvents
 	{
 	public:
 		virtual ~AsyncRecv() {}
@@ -113,7 +122,7 @@ namespace telling
 		After a successful send, we may send another message by returning
 			CONTINUE and filling in sendMsg.
 	*/
-	class AsyncSend : public AsyncOp
+	class AsyncSend : public AsyncOp_withPipeEvents
 	{
 	public:
 		virtual ~AsyncSend() {}
@@ -191,7 +200,7 @@ namespace telling
 				}
 				else
 				{
-					[[fallthrough]]; case AsyncOp::CONTINUE: case AsyncOp::INITIATE: case AsyncOp::DECLINE:
+					[[fallthrough]]; case AsyncOp::CONTINUE: case AsyncOp::DECLINE:
 					ctx.recv(aio);
 				}
 				break;
@@ -228,7 +237,7 @@ namespace telling
 			case AsyncOp::AUTO:
 				if (aioResult == nng::error::success)
 				{
-					[[fallthrough]]; case AsyncOp::CONTINUE: case AsyncOp::INITIATE:
+					[[fallthrough]]; case AsyncOp::CONTINUE:
 					if (directive.sendMsg)
 					{
 						aio.set_msg(std::move(directive.sendMsg));
@@ -315,7 +324,6 @@ namespace telling
 		case AUTO:
 			if (directive.sendMsg)
 			{
-				[[fallthrough]]; case INITIATE:
 				_send_aio.set_msg(std::move(directive.sendMsg));
 				_send_ctx.send(_send_aio);
 				return;

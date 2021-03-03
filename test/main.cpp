@@ -282,7 +282,7 @@ int main(int argc, char **argv)
 				if (timer > 100)
 				{
 					timer = 0;
-					service.broadcastServiceRegistration();
+					//service.broadcastServiceRegistration();
 				}
 			}
 			else

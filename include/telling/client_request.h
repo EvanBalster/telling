@@ -31,15 +31,15 @@ namespace telling
 		class Req_Async : public Req_Base
 		{
 		public:
-			Req_Async(std::shared_ptr<AsyncQuery> p)                       : _delegate(p), Req_Base() {}
-			Req_Async(std::shared_ptr<AsyncQuery> p, const Req_Base &o)    : _delegate(p), Req_Base(o) {}
+			Req_Async(std::shared_ptr<AsyncQuery> p)                                 : Req_Base(p),           _delegate(p) {}
+			Req_Async(std::shared_ptr<AsyncQuery> p, const Req_Base &shareSocket)    : Req_Base(shareSocket), _delegate(p) {}
 			~Req_Async();
 
 			/*
 				Initiate a request.
 					May fail, throwing nng::exception.
 			*/
-			QueryID makeRequest(nng::msg &&msg);
+			QueryID request(nng::msg &&msg);
 
 
 			/*

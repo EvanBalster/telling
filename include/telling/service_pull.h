@@ -29,7 +29,7 @@ namespace telling
 				Construct with an AsyncRecv delegate.
 					Begins listening for messages immediately.
 			*/
-			Pull_Async(std::shared_ptr<AsyncRecv> p)                                   : Pull_Base(),            Operator(socketView(), p) {}
+			Pull_Async(std::shared_ptr<AsyncRecv> p)                                   : Pull_Base(p),           Operator(socketView(), p) {}
 			Pull_Async(std::shared_ptr<AsyncRecv> p, const Pull_Base &shareSocket)     : Pull_Base(shareSocket), Operator(socketView(), p) {}
 			~Pull_Async() {}
 		};

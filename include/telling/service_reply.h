@@ -29,8 +29,8 @@ namespace telling
 			public Rep_Base
 		{
 		public:
-			Rep_Async(std::shared_ptr<AsyncRespond> p)                       : Rep_Base() , _delegate(p)    {_init();}
-			Rep_Async(std::shared_ptr<AsyncRespond> p, const Rep_Base &o)    : Rep_Base(o), _delegate(p)    {_init();}
+			Rep_Async(std::shared_ptr<AsyncRespond> p)                                 : Rep_Base(p),           _delegate(p)    {_init();}
+			Rep_Async(std::shared_ptr<AsyncRespond> p, const Rep_Base &shareSocket)    : Rep_Base(shareSocket), _delegate(p)    {_init();}
 			~Rep_Async();
 
 
