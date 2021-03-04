@@ -79,7 +79,7 @@ namespace telling
 				When a client is connected directly to a service, no URI routing occurs.
 		*/
 		void dial         (const HostAddress::Base &base)             {Each_Dial      (base, _replier(), _publisher(), _puller());}
-		void listen       (const HostAddress::Base &base)             {Each_Dial      (base, _replier(), _publisher(), _puller());}
+		void listen       (const HostAddress::Base &base)             {Each_Listen    (base, _replier(), _publisher(), _puller());}
 		void disconnect   (const HostAddress::Base &base) noexcept    {Each_Disconnect(base, _replier(), _publisher(), _puller());}
 		void disconnectAll()                              noexcept    {Each_DisconnectAll   (_replier(), _publisher(), _puller());}
 		void close        ()                              noexcept    {Each_Close           (_replier(), _publisher(), _puller());}

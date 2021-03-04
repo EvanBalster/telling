@@ -131,6 +131,8 @@ Socket::~Socket()
 
 void Socket::close() noexcept
 {
+	std::lock_guard g(_mtx);
+
 	if (_socket)
 	{
 		LogSocketEvent(*this, "CLOSE", "");
@@ -175,6 +177,7 @@ void Socket::_pipeCallback(nng_pipe _pipe, nng_pipe_ev _event, void *_self)
 
 void Socket::dial(const std::string &uri)
 {
+	std::lock_guard g(_mtx);
 	if (!_socket) throw nng::exception(nng::error::closed, "The socket is not open.");
 
 	auto p = _connectors.emplace(uri, nng::make_dialer  (_socket, uri.c_str(), nng::flag::nonblock));
@@ -183,6 +186,7 @@ void Socket::dial(const std::string &uri)
 }
 void Socket::listen(const std::string &uri)
 {
+	std::lock_guard g(_mtx);
 	if (!_socket) throw nng::exception(nng::error::closed, "The socket is not open.");
 
 	auto p = _connectors.emplace(uri, nng::make_listener(_socket, uri.c_str(), nng::flag::nonblock));
@@ -192,6 +196,7 @@ void Socket::listen(const std::string &uri)
 
 void Socket::disconnect(const std::string &uri) noexcept
 {
+	std::lock_guard g(_mtx);
 #if SOCKET_LOGGING
 	{
 		auto p = _connectors.find(uri);
@@ -204,6 +209,7 @@ void Socket::disconnect(const std::string &uri) noexcept
 
 void Socket::disconnectAll() noexcept
 {
+	std::lock_guard g(_mtx);
 	LogSocketEvent(*this, "DISCONN", "(ALL)");
 
 	_connectors.clear();

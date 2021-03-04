@@ -220,8 +220,10 @@ void Server::Services::run_management_thread()
 	{
 		while (to_close.size())
 		{
-			delete to_close.front();
+			auto route = to_close.front();
 			to_close.pop_front();
+			server->publish.subscribe.disconnect(route->path);
+			delete route;
 		}
 
 		while (to_open.size())
@@ -259,6 +261,7 @@ void Server::Services::run_management_thread()
 			try
 			{
 				Route &sockets = **map.emplace(spec.map_uri, new Route(*server, std::string(spec.map_uri))).first;
+				server->publish.subscribe.dial(spec.host);
 				sockets.dial(spec.host);
 				log << " ...OK" << endl;
 			}
@@ -322,4 +325,15 @@ void Server::Route::dial(const HostAddress::Base &base)
 {
 	req.dial(base);
 	push.dial(base);
+}
+
+void Server::Route::sendPush   (nng::msg &&msg)
+{
+	std::lock_guard<std::mutex> g(mtx);
+	push.push(std::move(msg));
+}
+void Server::Route::sendRequest(nng::msg &&msg) 
+{
+	std::lock_guard<std::mutex> g(mtx);
+	req_send.send_msg(std::move(msg));
 }

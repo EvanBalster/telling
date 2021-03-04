@@ -30,7 +30,7 @@ AsyncOp::Directive Server::Pull::received(const MsgView::Request &request, nng::
 
 	auto status = server->services.routePush(request.uri, std::move(msg));
 
-	server->log << Name() << ": pushing to URI `" << request.uri << "`" << std::endl;
+	//server->log << Name() << ": pushing to URI `" << request.uri << "`" << std::endl;
 
 	if (status.isSuccessful())
 	{

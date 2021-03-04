@@ -92,6 +92,7 @@ namespace telling
 
 
 	protected:
+		std::mutex    _mtx;
 		nng::socket   _socket;
 		uint32_t      _pipe_count = 0;
 

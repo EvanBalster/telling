@@ -94,6 +94,118 @@ namespace telling
 		};
 
 
+		class Route;
+		class Services;
+
+
+		/*
+			Published messages are routed to all subscribers.
+				Services dial into sub_internal and publish their paths.
+		*/
+		class Publish
+		{
+		public:
+			Publish();
+			~Publish();
+
+			Server *server();
+			static const char *Name()    {return "*PUB";}
+			Socket &hostSocket()         {return *publish.socket();}
+
+		protected:
+			friend class Services; // for now
+
+			using Delegate_Sub = DelegateRecv<Publish, MsgView::Bulletin>;
+			std::shared_ptr<Delegate_Sub> sub_delegate;
+
+			client::Subscribe_Async subscribe;
+			service::Publish_Box    publish;
+
+			friend class Delegate_Sub;
+			AsyncOp::Directive received(const MsgView::Bulletin&, nng::msg&&);
+			AsyncOp::Directive receive_error(Delegate_Sub*, nng::error);
+		}
+			publish;
+		
+		/*
+			Push-pull pattern.  Messages are routed by path.
+		*/
+		class Pull
+		{
+		public:
+			Pull();
+			~Pull();
+
+			Server *server();
+			static const char *Name()    {return "*PULL";}
+			Socket &hostSocket()         {return *pull.socket();}
+
+		protected:
+			using Delegate_Pull = DelegateRecv<Pull, MsgView::Request>;
+			std::shared_ptr<Delegate_Pull> pull_delegate;
+
+			service::Pull_Async pull;
+
+			friend class Delegate_Pull;
+			AsyncOp::Directive received(const MsgView::Request&, nng::msg&&);
+			AsyncOp::Directive receive_error(Delegate_Pull*, nng::error);
+		}
+			pull;
+
+		/*
+			Requests are routed to services by prefix.
+			Replies are routed to requesters with a backtrace.
+		*/
+		class Reply
+		{
+		public:
+			using Delegate_Reply   = DelegateRecv<Reply, MsgView::Reply>;
+			using Delegate_Request = DelegateRecv<Reply, MsgView::Request>;
+
+
+		public:
+			Reply();
+			~Reply();
+
+			Server *server();
+			static const char *Name()    {return "*REP";}
+			Socket &hostSocket()         {return reply_ext;}
+
+
+			std::shared_ptr<Delegate_Reply> reply_handler()    {return delegate_reply;}
+
+
+		protected:
+			std::shared_ptr<Delegate_Reply>   delegate_reply;
+			std::shared_ptr<Delegate_Request> delegate_request;
+
+			Socket
+				reply_ext,   // <--> clients
+				request_dvc, // connects int and ext with a device
+				reply_int;   // <--> services
+
+			// I/O handling for replies
+			std::shared_ptr<AsyncSendQueue>       rep_sendQueue;
+			AsyncSend::Operator<nng::socket_view> rep_send;
+			AsyncRecv::Operator<nng::socket_view> rep_recv;
+
+			friend class Delegate_Reply;
+			friend class Delegate_Request;
+			AsyncOp::Directive received(const MsgView::Reply&,   nng::msg&&);
+			AsyncOp::Directive received(const MsgView::Request&, nng::msg&&);
+
+			AsyncOp::Directive receive_error(Delegate_Request*, nng::error);
+			AsyncOp::Directive receive_error(Delegate_Reply  *, nng::error);
+
+
+		private:
+			std::thread thread_device;
+			static void run_device(Reply*);
+		}
+			reply;
+
+
+
 		/*
 			Connection to a Service.
 				Services class manages the routing table.
@@ -105,8 +217,8 @@ namespace telling
 			const std::string  path;
 
 
-			void sendPush   (nng::msg &&msg)   {std::lock_guard<std::mutex> g(mtx); push.push        (std::move(msg));}
-			void sendRequest(nng::msg &&msg)   {std::lock_guard<std::mutex> g(mtx); req_send.send_msg(std::move(msg));}
+			void sendPush   (nng::msg &&msg);
+			void sendRequest(nng::msg &&msg);
 			
 
 		public:
@@ -244,111 +356,6 @@ namespace telling
 			static const char *Name()    {return "*services";}
 		}
 			services;
-
-
-		/*
-			Published messages are routed to all subscribers.
-				Services dial into sub_internal and publish their paths.
-		*/
-		class Publish
-		{
-		public:
-			Publish();
-			~Publish();
-
-			Server *server();
-			static const char *Name()    {return "*PUB";}
-			Socket &hostSocket()         {return *publish.socket();}
-
-		protected:
-			using Delegate_Sub = DelegateRecv<Publish, MsgView::Bulletin>;
-			std::shared_ptr<Delegate_Sub> sub_delegate;
-
-			client::Subscribe_Async subscribe;
-			service::Publish_Box    publish;
-
-			friend class Delegate_Sub;
-			AsyncOp::Directive received(const MsgView::Bulletin&, nng::msg&&);
-			AsyncOp::Directive receive_error(Delegate_Sub*, nng::error);
-		}
-			publish;
-		
-		/*
-			Push-pull pattern.  Messages are routed by path.
-		*/
-		class Pull
-		{
-		public:
-			Pull();
-			~Pull();
-
-			Server *server();
-			static const char *Name()    {return "*PULL";}
-			Socket &hostSocket()         {return *pull.socket();}
-
-		protected:
-			using Delegate_Pull = DelegateRecv<Pull, MsgView::Request>;
-			std::shared_ptr<Delegate_Pull> pull_delegate;
-
-			service::Pull_Async pull;
-
-			friend class Delegate_Pull;
-			AsyncOp::Directive received(const MsgView::Request&, nng::msg&&);
-			AsyncOp::Directive receive_error(Delegate_Pull*, nng::error);
-		}
-			pull;
-
-		/*
-			Requests are routed to services by prefix.
-			Replies are routed to requesters with a backtrace.
-		*/
-		class Reply
-		{
-		public:
-			using Delegate_Reply   = DelegateRecv<Reply, MsgView::Reply>;
-			using Delegate_Request = DelegateRecv<Reply, MsgView::Request>;
-
-
-		public:
-			Reply();
-			~Reply();
-
-			Server *server();
-			static const char *Name()    {return "*REP";}
-			Socket &hostSocket()         {return reply_ext;}
-
-
-			std::shared_ptr<Delegate_Reply> reply_handler()    {return delegate_reply;}
-
-
-		protected:
-			std::shared_ptr<Delegate_Reply>   delegate_reply;
-			std::shared_ptr<Delegate_Request> delegate_request;
-
-			Socket
-				reply_ext,   // <--> clients
-				request_dvc, // connects int and ext with a device
-				reply_int;   // <--> services
-
-			// I/O handling for replies
-			std::shared_ptr<AsyncSendQueue>       rep_sendQueue;
-			AsyncSend::Operator<nng::socket_view> rep_send;
-			AsyncRecv::Operator<nng::socket_view> rep_recv;
-
-			friend class Delegate_Reply;
-			friend class Delegate_Request;
-			AsyncOp::Directive received(const MsgView::Reply&,   nng::msg&&);
-			AsyncOp::Directive received(const MsgView::Request&, nng::msg&&);
-
-			AsyncOp::Directive receive_error(Delegate_Request*, nng::error);
-			AsyncOp::Directive receive_error(Delegate_Reply  *, nng::error);
-
-
-		private:
-			std::thread thread_device;
-			static void run_device(Reply*);
-		}
-			reply;
 	};
 
 

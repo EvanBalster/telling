@@ -96,6 +96,8 @@ AsyncOp::Directive Server::Reply::received(const MsgView::Request &request, nng:
 
 	auto status = server->services.routeRequest(request.uri, std::move(msg));
 
+	//server->log << Name() << ": routing to `" << request.uri << "`" << std::endl;
+
 	if (status.isSuccessful())
 	{
 		return AsyncOp::CONTINUE;
