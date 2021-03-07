@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <nngpp/aio.h>
+#include <nngpp/core.h>
 
 
 namespace telling
@@ -52,6 +53,8 @@ namespace telling
 	};
 
 
+	class Socket;
+
 	/*
 		Adds optional pipe events to async handlers.
 	*/
@@ -60,7 +63,7 @@ namespace telling
 	public:
 		virtual ~AsyncOp_withPipeEvents() {}
 
-		virtual void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) {}
+		virtual void pipeEvent(Socket *socket, nng::pipe_view pipe, nng::pipe_ev event) {}
 	};
 
 

@@ -40,7 +40,7 @@ public:
 		return AsyncOp::AUTO;
 	}
 
-	void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) final
+	void pipeEvent(Socket *socket, nng::pipe_view pipe, nng::pipe_ev event) final
 	{
 		std::lock_guard gSelf(mtx);
 		if (!services) return;

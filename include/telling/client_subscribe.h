@@ -13,8 +13,22 @@ namespace telling
 {
 	namespace client
 	{
+		using Sub_Pattern = Communicator::Pattern_Base<Role::CLIENT, Pattern::PUB_SUB>;
+
 		// Base type for Subscribe clients.
-		using Sub_Base = Communicator::Pattern_Base<Role::CLIENT, Pattern::PUB_SUB>;
+		class Sub_Base : public Sub_Pattern
+		{
+		public:
+			Sub_Base(std::shared_ptr<AsyncOp_withPipeEvents> p)    : Sub_Pattern(p)           {}
+			Sub_Base(const Sub_Base &shareSocket)                  : Sub_Pattern(shareSocket) {}
+			~Sub_Base() {}
+
+			/*
+				Manage subscriptions.
+			*/
+			virtual void subscribe  (std::string_view topic) = 0;
+			virtual void unsubscribe(std::string_view topic) = 0;
+		};
 
 
 		// Shorthand & longhand
@@ -42,8 +56,8 @@ namespace telling
 			/*
 				Manage subscriptions.
 			*/
-			void subscribe  (std::string_view topic);
-			void unsubscribe(std::string_view topic);
+			void subscribe  (std::string_view topic) final;
+			void unsubscribe(std::string_view topic) final;
 		};
 
 

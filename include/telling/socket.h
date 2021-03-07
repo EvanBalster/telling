@@ -255,8 +255,7 @@ namespace telling
 
 
 	protected:
-		void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) override
-			{op->pipeEvent(pipe, event);}
+		void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) override    {op->pipeEvent(this, pipe, event);}
 
 		std::shared_ptr<AsyncOp_withPipeEvents> op;
 	};
@@ -283,35 +282,50 @@ namespace telling
 	};
 
 
-	namespace detail
+	namespace detail {template<typename... Args> void pass(Args...) {}}
+	#define ARGS_CALL_REF(CALL) detail::pass(        (args. CALL, 0)      ...)
+	#define ARGS_CALL_PTR(CALL) detail::pass((args ? (args->CALL, 0) : 0) ...)
+
+	template<class... Args>
+	void Close(Args&... args) noexcept    {ARGS_CALL_REF(close());}
+	template<class... Args>
+	void Close(Args*... args) noexcept    {ARGS_CALL_PTR(close());}
+
+	template<class... Args>
+	void DisconnectAll(Args&... args) noexcept    {ARGS_CALL_REF(disconnectAll());}
+	template<class... Args>
+	void DisconnectAll(Args*... args) noexcept    {ARGS_CALL_PTR(disconnectAll());}
+
+	template<class... Args>
+	void Disconnect(const HostAddress::Base &base, Args&... args) noexcept    {ARGS_CALL_REF(disconnect(base));}
+	template<class... Args>
+	void Disconnect(const HostAddress::Base &base, Args*... args) noexcept    {ARGS_CALL_PTR(disconnect(base));}
+
+	template<class... Args>
+	void Dial(const HostAddress::Base &base, Args&... args)
 	{
-		template<typename... Args>
-		void pass(Args...) {}
+		try                          {ARGS_CALL_REF(dial(base));}
+		catch (nng::exception error) {ARGS_CALL_REF(disconnect(base)); throw error;}
+	}
+	template<class... Args>
+	void Dial(const HostAddress::Base &base, Args*... args)
+	{
+		try                          {ARGS_CALL_PTR(dial(base));}
+		catch (nng::exception error) {ARGS_CALL_PTR(disconnect(base)); throw error;}
 	}
 
 	template<class... Args>
-	void Each_Close(Args&... args) noexcept
-		{detail::pass((args.close(), 0) ...);}
-
-	template<class... Args>
-	void Each_DisconnectAll(Args&... args) noexcept
-		{detail::pass((args.disconnectAll(), 0) ...);}
-
-	template<class... Args>
-	void Each_Disconnect(const HostAddress::Base &base, Args&... args) noexcept
-		{detail::pass((args.disconnect(base), 0) ...);}
-
-	template<class... Args>
-	void Each_Dial(const HostAddress::Base &base, Args&... args)
+	void Listen(const HostAddress::Base &base, Args&... args)
 	{
-		try                          {detail::pass((args.dial      (base), 0) ...);}
-		catch (nng::exception error) {detail::pass((args.disconnect(base), 0) ...); throw error;}
+		try                          {ARGS_CALL_REF(listen(base));}
+		catch (nng::exception error) {ARGS_CALL_REF(disconnect(base)); throw error;}
+	}
+	template<class... Args>
+	void Listen(const HostAddress::Base &base, Args*... args)
+	{
+		try                          {ARGS_CALL_PTR(listen(base));}
+		catch (nng::exception error) {ARGS_CALL_PTR(disconnect(base)); throw error;}
 	}
 
-	template<class... Args>
-	void Each_Listen(const HostAddress::Base &base, Args&... args)
-	{
-		try                          {detail::pass((args.listen    (base), 0) ...);}
-		catch (nng::exception error) {detail::pass((args.disconnect(base), 0) ...); throw error;}
-	}
+	#undef CALL_ON_ARGS
 }

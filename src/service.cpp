@@ -29,76 +29,39 @@ void Service_Base::enlist(std::string_view serverID)
 }
 
 
-class Service_Async::Delegate :
-	public AsyncSend,
-	public AsyncRecv,
-	public AsyncRespond
+
+
+AsyncOp::SendDirective Service_Async::Handler::asyncSend_msg(nng::msg &&msg)
 {
-public:
-	std::shared_ptr<Handler> handler;
-
-	SendQueueMtx publishQueue;
-
-public:
-	Delegate(std::shared_ptr<Handler> _handler) :
-		handler(std::move(_handler))
-	{
-
-	}
-	~Delegate() override {}
-
-	/*
-		AsyncRespond interface (reply pattern)
-	*/
-	SendDirective asyncRespond_recv (QueryID qid, nng::msg &&msg)    override {return handler->request_recv(qid, std::move(msg));}
-	void          asyncRespond_done (QueryID qid)                    override {handler->reply_sent(qid);}
-	Directive     asyncRespond_error(QueryID qid, nng::error status) override {return handler->reply_error(qid, status);}
-
-	/*
-		AsyncRecv interface (pull pattern)
-	*/
-	Directive asyncRecv_msg  (nng::msg &&msg   ) override {return handler->pull_recv(std::move(msg));}
-	Directive asyncRecv_error(nng::error status) override {return handler->pull_error(status);}
-
-	/*
-		AsyncSend interface (publish pattern)
-	*/
-	SendDirective asyncSend_msg(nng::msg &&msg) override
-	{
-		if (publishQueue.produce(std::move(msg))) return CONTINUE;
-		return SendDirective(std::move(msg));
-	}
-	SendDirective asyncSend_sent() override
-	{
-		auto direct = handler->publish_sent();
+	if (publishQueue.produce(std::move(msg))) return CONTINUE;
+	return SendDirective(std::move(msg));
+}
+AsyncOp::SendDirective Service_Async::Handler::asyncSend_sent()
+{
+	auto direct = this->publish_sent();
 		
-		if (!direct.sendMsg) switch (direct.directive)
-		{
-		case DECLINE: case TERMINATE:
-			// Interrupt sending
-			break;
-		case AUTO: case CONTINUE: default:
-			nng::msg next;
-			if (publishQueue.consume(next)) direct = std::move(next);
-			else                            direct = DECLINE;
-			break;
-		}
-		return direct;
-	}
-	SendDirective asyncSend_error(nng::error status) override
+	if (!direct.sendMsg) switch (direct.directive)
 	{
-		return handler->publish_error(status);
+	case DECLINE: case TERMINATE:
+		// Interrupt sending
+		break;
+	case AUTO: case CONTINUE: default:
+		nng::msg next;
+		if (publishQueue.consume(next)) direct = std::move(next);
+		else                            direct = DECLINE;
+		break;
 	}
-};
+	return direct;
+}
 
 
-Service_Async::Service_Async(std::shared_ptr<Handler> handler,
+Service_Async::Service_Async(std::shared_ptr<Handler> _handler,
 	std::string _uri, std::string_view serverID)
 	: Service_Base(_uri, serverID),
-	delegate(std::make_shared<Delegate>(handler)),
-	replier  (delegate),
-	puller   (delegate),
-	publisher(delegate)
+	//handler(std::move(_handler)),
+	_replier  (std::static_pointer_cast<AsyncRespond>(_handler)),
+	_puller   (std::static_pointer_cast<AsyncRecv   >(_handler)),
+	_publisher(std::static_pointer_cast<AsyncSend   >(_handler))
 {
 	listen(inProcAddress());
 }

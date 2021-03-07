@@ -2,6 +2,8 @@
 
 #include <optional>
 
+#include "service_enlist.h"
+
 #include "service_reply.h"
 #include "service_pull.h"
 #include "service_publish.h"
@@ -11,47 +13,6 @@
 
 namespace telling
 {
-	/*
-		Used to enlist services with a Server in the same process.
-	*/
-	class Enlistment
-	{
-	public:
-		enum STATUS
-		{
-			INITIAL   = 0,
-			REQUESTED = 1,
-			ENLISTED  = 2,
-			FAILED   = -1,
-		};
-
-
-	public:
-		Enlistment(
-			std::string_view serverID,
-			std::string_view serviceURI);
-		Enlistment(
-			std::string_view serverID,
-			std::string_view serviceURI,
-			std::string_view serviceURI_enlist_as);
-		~Enlistment();
-
-		/*
-			Check enlistment status.
-		*/
-		STATUS                status()     const noexcept;
-		const nng::exception &exception()  const noexcept;
-		bool                  isWorking () const noexcept    {auto s=status(); return s==INITIAL || s==REQUESTED;}
-		bool                  isEnlisted() const noexcept    {return status() == ENLISTED;}
-
-
-	public:
-		class Delegate;
-		std::shared_ptr<AsyncQuery> delegate;
-		client::Request_Async       requester;
-	};
-
-
 	/*
 		Base class for Services.
 	*/
@@ -78,17 +39,19 @@ namespace telling
 				It is unusual but possible for a service to dial a listening client.
 				When a client is connected directly to a service, no URI routing occurs.
 		*/
-		void dial         (const HostAddress::Base &base)             {Each_Dial      (base, _replier(), _publisher(), _puller());}
-		void listen       (const HostAddress::Base &base)             {Each_Listen    (base, _replier(), _publisher(), _puller());}
-		void disconnect   (const HostAddress::Base &base) noexcept    {Each_Disconnect(base, _replier(), _publisher(), _puller());}
-		void disconnectAll()                              noexcept    {Each_DisconnectAll   (_replier(), _publisher(), _puller());}
-		void close        ()                              noexcept    {Each_Close           (_replier(), _publisher(), _puller());}
+		void dial         (const HostAddress::Base &base)             {Dial      (base, replier(), publisher(), puller());}
+		void listen       (const HostAddress::Base &base)             {Listen    (base, replier(), publisher(), puller());}
+		void disconnect   (const HostAddress::Base &base) noexcept    {Disconnect(base, replier(), publisher(), puller());}
+		void disconnectAll()                              noexcept    {DisconnectAll   (replier(), publisher(), puller());}
+		void close        ()                              noexcept    {Close           (replier(), publisher(), puller());}
 
 
-	protected:
-		virtual service::Reply_Base   &_replier()   noexcept = 0;
-		virtual service::Publish_Base &_publisher() noexcept = 0;
-		virtual service::Pull_Base    &_puller()    noexcept = 0;
+		/*
+			Access individual communicators.
+		*/
+		virtual service::Reply_Base   *replier()   noexcept = 0;
+		virtual service::Publish_Base *publisher() noexcept = 0;
+		virtual service::Pull_Base    *puller()    noexcept = 0;
 	};
 
 
@@ -97,16 +60,6 @@ namespace telling
 	*/
 	class Service_Box : public Service_Base
 	{
-	protected:
-		service::Reply_Box   replier;
-		service::Publish_Box publisher;
-		service::Pull_Box    puller;
-
-		service::Reply_Base   &_replier()   noexcept final    {return replier;}
-		service::Publish_Base &_publisher() noexcept final    {return publisher;}
-		service::Pull_Base    &_puller()    noexcept final    {return puller;}
-
-
 	public:
 		Service_Box(std::string _uri, std::string_view serverID = std::string_view());
 		~Service_Box() override;
@@ -117,26 +70,38 @@ namespace telling
 		/*
 			Publish a message to a topic (URI).
 		*/
-		void publish(nng::msg &&msg)         {publisher.publish(std::move(msg));}
+		void publish(nng::msg &&msg)         {_publisher.publish(std::move(msg));}
 
 
 		/*
 			Receive pushed messages.
 		*/
-		bool pull(nng::msg &msg)             {return puller.pull(msg);}
+		bool pull(nng::msg &msg)             {return _puller.pull(msg);}
 
 
 		/*
 			Receive and reply to requests (one by one).
 		*/
-		bool receive(nng::msg  &request)     {return replier.receive(request);}
-		void respond(nng::msg &&reply)       {replier.respond(std::move(reply));}
+		bool receive(nng::msg  &request)     {return _replier.receive(request);}
+		void respond(nng::msg &&reply)       {_replier.respond(std::move(reply));}
 
 		/*
 			Reply to all pending requests with a functor.
 		*/
-		template<class Fn>          void respond_all(Fn fn)           {replier.respond_all(fn);}
-		template<class Fn, class A> void respond_all(Fn fn, A arg)    {replier.respond_all(fn, arg);}
+		template<class Fn>          void respond_all(Fn fn)           {_replier.respond_all(fn);}
+		template<class Fn, class A> void respond_all(Fn fn, A arg)    {_replier.respond_all(fn, arg);}
+
+
+		// Access communicators.
+		service::Reply_Base   *replier()   noexcept final    {return &_replier;}
+		service::Publish_Base *publisher() noexcept final    {return &_publisher;}
+		service::Pull_Base    *puller()    noexcept final    {return &_puller;}
+
+
+	protected:
+		service::Reply_Box   _replier;
+		service::Publish_Box _publisher;
+		service::Pull_Box    _puller;
 	};
 
 
@@ -146,16 +111,69 @@ namespace telling
 	class Service_Async : public Service_Base
 	{
 	public:
-		using SendDirective = AsyncOp::SendDirective;
-		using Directive     = AsyncOp::Directive;
-
 		/*
 			Asynchronous events are delivered to a delegate object.
 		*/
-		class Handler
+		class Handler :
+			public AsyncSend,
+			public AsyncRecv,
+			public AsyncRespond
 		{
 		public:
 			virtual ~Handler() {}
+
+			using SendDirective = AsyncOp::SendDirective;
+			using Directive     = AsyncOp::Directive;
+
+
+		protected:
+			// Receive a pull message.
+			// There is no method for replying.
+			virtual Directive     pull_recv (nng::msg &&request) = 0;
+			virtual Directive     pull_error(nng::error)         {}
+
+			// Receive a request.
+			// May respond immediately (return a msg) or later (via respondTo).
+			virtual SendDirective request_recv (QueryID id, nng::msg &&request) = 0;
+
+			// Reply processing status (optional).
+			// reply_error may be also be triggered if there is some error receiving a request.
+			virtual void          reply_sent (QueryID id)                {}
+			virtual Directive     reply_error(QueryID id, nng::error)    {return AsyncOp::TERMINATE;}
+
+			// Publish outbox status (optional)
+			virtual SendDirective publish_sent ()              {}
+			virtual SendDirective publish_error(nng::error)    {return AsyncOp::TERMINATE;}
+
+			// Optionally receive pipe events from the various sockets.
+			virtual void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) {}
+
+
+		private:
+			SendQueueMtx publishQueue;
+
+			// AsyncRespond impl.
+			SendDirective asyncRespond_recv (QueryID qid, nng::msg &&m)    final    {return this->request_recv(qid, std::move(m));}
+			void          asyncRespond_done (QueryID qid)                  final    {this->reply_sent(qid);}
+			Directive     asyncRespond_error(QueryID qid, nng::error e)    final    {return this->reply_error(qid, e);}
+
+			// AsyncRecv (Pull) impl.
+			Directive asyncRecv_msg  (nng::msg &&msg   ) final    {return this->pull_recv(std::move(msg));}
+			Directive asyncRecv_error(nng::error status) final    {return this->pull_error(status);}
+
+			// AsyncSend (Publish) impl.
+			SendDirective asyncSend_msg  (nng::msg &&msg)    final;
+			SendDirective asyncSend_sent ()                  final;
+			SendDirective asyncSend_error(nng::error status) final    {return this->publish_error(status);}
+		};
+
+		/*
+			A convenience variant of Handler, allowing for simpler implementations.
+		*/
+		class Handler_Ex : public Handler
+		{
+		public:
+			virtual ~Handler_Ex() {}
 
 
 			/*
@@ -169,40 +187,13 @@ namespace telling
 			virtual SendDirective recv(QueryID id, nng::msg &&msg) = 0;
 
 
-			// Receive a pull message.
-			// There is no method for replying.
-			virtual Directive     pull_recv (nng::msg &&request) {auto d=recv(0, std::move(request)); return d.directive;}
-			virtual Directive     pull_error(nng::error)         {}
-
-			// Receive a request.
-			// May respond immediately (return a msg) or later (via respondTo).
-			virtual SendDirective request_recv (QueryID id, nng::msg &&request) {return recv(id, std::move(request));}
-
-			// Reply processing status (optional).
-			// reply_error may be triggered
-			virtual void          reply_sent (QueryID id)             {}
-			virtual Directive     reply_error(QueryID id, nng::error) {return AsyncOp::TERMINATE;}
-
-			// Publish outbox status (optional)
-			virtual SendDirective publish_sent ()           {}
-			virtual SendDirective publish_error(nng::error) {return AsyncOp::TERMINATE;}
-
-			// Pipe events.
-			//virtual void pipeEvent(Communicator&, nng::pipe_view, nng::pipe_ev) {}
+		protected:
+			// Implementation...
+			Directive     pull_recv   (            nng::msg &&request) override
+				{auto d=recv(QueryID(0), std::move(request)); return d.directive;}
+			SendDirective request_recv(QueryID id, nng::msg &&request) override
+				{return recv(id, std::move(request));}
 		};
-
-		class Delegate;
-
-
-	protected:
-		std::shared_ptr<Delegate> delegate;
-		service::Reply_Async      replier;
-		service::Pull_Async       puller;
-		service::Publish_Async    publisher;
-
-		service::Reply_Base   &_replier()   noexcept final    {return replier;}
-		service::Publish_Base &_publisher() noexcept final    {return publisher;}
-		service::Pull_Base    &_puller()    noexcept final    {return puller;}
 
 
 	public:
@@ -213,11 +204,24 @@ namespace telling
 		/*
 			Publish a message to a topic (URI).
 		*/
-		void publish(nng::msg &&bulletin)                       {publisher.publish(std::move(bulletin));}
+		void publish(nng::msg &&bulletin)                       {_publisher.publish(std::move(bulletin));}
 
 		/*
 			Respond to the query with the given ID.
 		*/
-		void respondTo(QueryID queryID, nng::msg &&reply)       {replier.respondTo(queryID, std::move(reply));}
+		void respondTo(QueryID queryID, nng::msg &&reply)       {_replier.respondTo(queryID, std::move(reply));}
+
+
+		// Access communicators.
+		service::Reply_Base   *replier()   noexcept final    {return &_replier;}
+		service::Publish_Base *publisher() noexcept final    {return &_publisher;}
+		service::Pull_Base    *puller()    noexcept final    {return &_puller;}
+
+
+	protected:
+		//std::shared_ptr<Handler> handler;
+		service::Reply_Async     _replier;
+		service::Pull_Async      _puller;
+		service::Publish_Async   _publisher;
 	};
 }

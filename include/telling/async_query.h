@@ -50,7 +50,7 @@ namespace telling
 
 			QueryID may be reused after "done" or "error".
 		*/
-		virtual Directive asyncQuery_made (QueryID, const nng::msg &query)  = 0;
+		virtual Directive asyncQuery_made (QueryID, const nng::msg &query)  {return CONTINUE;}
 		virtual Directive asyncQuery_sent (QueryID)                         {return CONTINUE;}
 		virtual Directive asyncQuery_done (QueryID, nng::msg &&response)    = 0;
 		virtual Directive asyncQuery_error(QueryID, nng::error status)      = 0;

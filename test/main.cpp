@@ -451,7 +451,7 @@ int main(int argc, char **argv)
 			case 0:
 				// Push
 				cout << "CLI-PUSH send > `" << service_uri << "`";
-				if (!client.requester.isConnected()) cout << " -- NO CONNECTION";
+				if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
 				cout << endl;
 				client.push(msg.release());
 				break;
@@ -459,15 +459,13 @@ int main(int argc, char **argv)
 			case 1:
 				// Make a request
 				cout << "CLI-REQ send > `" << service_uri << "`";
-				if (!client.requester.isConnected()) cout << " -- NO CONNECTION";
+				if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
 				if (pending_requests.size())
 				{
 					cout << endl << "\t" << pending_requests.size() << " pending ( ";
-					size_t n;
-					n = client.requester.countUnsent();
-					if (n) cout << n << " unsent ";
-					n = client.requester.countSentAwaitingReply();
-					if (n) cout << n << " awaiting reply";
+					auto stats = client.requester()->msgStats();
+					if (stats.awaiting_send) cout << stats.awaiting_send << " unsent ";
+					if (stats.awaiting_recv) cout << stats.awaiting_recv << " awaiting reply";
 					cout << " )";
 				}
 				cout << endl;

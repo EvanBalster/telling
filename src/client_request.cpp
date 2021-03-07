@@ -12,21 +12,20 @@ using namespace telling::client;
 	Request implementation
 */
 
-size_t Req_Async::countUnsent()
+Req_Base::MsgStats Req_Async::msgStats() const noexcept
 {
 	std::lock_guard<std::mutex> g(mtx);
 
-	size_t n = 0;
-	for (auto &i : active) if (i->state == SEND) ++n;
-	return n;
-}
-size_t Req_Async::countSentAwaitingReply()
-{
-	std::lock_guard<std::mutex> g(mtx);
+	MsgStats stats = {};
 
-	size_t n = 0;
-	for (auto &i : active) if (i->state == RECV) ++n;
-	return n;
+	for (auto &i : active) switch (i->state)
+	{
+	case SEND: ++stats.awaiting_send; break;
+	case RECV: ++stats.awaiting_recv; break;
+	default: break;
+	}
+
+	return stats;
 }
 
 Req_Async::~Req_Async()

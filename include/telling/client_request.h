@@ -16,7 +16,30 @@ namespace telling
 	namespace client
 	{
 		// Base type for Request clients.
-		using Req_Base = Communicator::Pattern_Base<Role::CLIENT, Pattern::REQ_REP>;
+		using Req_Pattern = Communicator::Pattern_Base<Role::CLIENT, Pattern::REQ_REP>;
+
+		// Base type for Subscribe clients.
+		class Req_Base : public Req_Pattern
+		{
+		public:
+			Req_Base(std::shared_ptr<AsyncOp_withPipeEvents> p)    : Req_Pattern(p)           {}
+			Req_Base(const Req_Base &shareSocket)                  : Req_Pattern(shareSocket) {}
+			~Req_Base() {}
+
+			
+			
+			/*
+				Get statistics
+			*/
+			struct MsgStats
+			{
+				size_t
+					awaiting_send,
+					awaiting_recv;
+			};
+
+			virtual MsgStats msgStats() const noexcept = 0;
+		};
 
 
 		// Shorthand & longhand
@@ -43,10 +66,9 @@ namespace telling
 
 
 			/*
-				Get statistics
+				Stats implementation
 			*/
-			size_t countUnsent();
-			size_t countSentAwaitingReply();
+			MsgStats msgStats() const noexcept final;
 
 
 		protected:
@@ -75,7 +97,7 @@ namespace telling
 			};
 
 			friend struct Action;
-			std::mutex                  mtx;
+			mutable std::mutex          mtx;
 			std::unordered_set<Action*> active;
 			std::deque<Action*>         idle;
 		};
