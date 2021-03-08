@@ -190,7 +190,7 @@ int main(int argc, char **argv)
 	using namespace std::chrono_literals;
 	
 
-	auto service_thread = [](std::string uri, std::string reply_text, size_t lifetime_ms = 7500)
+	auto service_thread = [](std::string uri, std::string reply_text, size_t lifetime_ms = 7500) -> void
 	{
 		unsigned timer = 0;
 		unsigned timerTotal = 0;
@@ -263,7 +263,7 @@ int main(int argc, char **argv)
 						<< std::string_view(e.position, e.length) << '`' << endl;
 					cout << endl;
 
-					return e.writeReply("Test Service");
+					service.respond(e.writeReply("Test Service"));
 				}
 			}
 
