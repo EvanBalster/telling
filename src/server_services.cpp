@@ -104,9 +104,7 @@ AsyncOp::SendDirective Server::Services::enlistRequest(QueryID queryID, nng::msg
 	{
 		log << Name() << ": message parse exception: " << e.what() << std::endl;
 
-		auto writer = MsgWriter::Reply(HttpStatus::Code::BadRequest);
-		writer.writeData("Could not parse request.");
-		return writer.release();
+		return e.writeReply("Service Enlistment Request Handler");
 	}
 
 	/*

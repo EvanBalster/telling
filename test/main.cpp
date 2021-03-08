@@ -263,13 +263,7 @@ int main(int argc, char **argv)
 						<< std::string_view(e.position, e.length) << '`' << endl;
 					cout << endl;
 
-					auto reply = MsgWriter::Reply(StatusCode::BadRequest);
-					reply.writeData("Error parsing message: ");
-					reply.writeData(e.what());
-					reply.writeData("\r\nAt location: `");
-					reply.writeData(std::string_view(e.position, e.length));
-					reply.writeData("`");
-					service.respond(reply.release());
+					return e.writeReply("Test Service");
 				}
 			}
 
@@ -304,7 +298,9 @@ int main(int argc, char **argv)
 
 		cout << "==== Destroying service." << endl;
 		}
-		cout << "==== Destroyed service." << endl;
+		cout << "==== Destroyed service..." << endl;
+		std::this_thread::sleep_for(2000ms);
+		cout << "==== Destroyed service, a little while ago." << endl;
 		cout << endl;
 	};
 

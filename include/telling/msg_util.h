@@ -4,6 +4,8 @@
 #include <string_view>
 #include <exception>
 
+#include <nngpp/msg.h>
+
 
 namespace telling
 {
@@ -41,6 +43,12 @@ namespace telling
 			default:                   return "An unknown error occurred while parsing the message.";
 			}
 		}
+
+		/*
+			Generate a reply message describing the error.
+		*/
+		nng::msg writeReply(std::string_view error_context) const;
+
 
 	public:
 		MSG_ERROR         error;
