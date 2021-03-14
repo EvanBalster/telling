@@ -16,8 +16,7 @@ Server::Publish::Publish() :
 	subscribe.subscribe("");
 
 	// Relay service events to internal modules (dial-in mechanism)
-	subscribe.listen(server->address_services);
-	publish.listen(server->address_internal);
+	subscribe.listen(server->address_internal);
 }
 Server::Publish::~Publish()
 {

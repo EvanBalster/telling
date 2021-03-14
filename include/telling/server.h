@@ -339,6 +339,8 @@ namespace telling
 
 			AsyncOp::SendDirective enlistRequest(QueryID, nng::msg &&);
 			void                   enlistExpired(nng::pipe_view);
+
+			service::Publish_Box publish_events;
 			
 
 			Route *route(std::string_view path)

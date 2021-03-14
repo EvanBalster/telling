@@ -69,6 +69,10 @@ Server::Services::Services() :
 	// Responders may dial
 	enlist_reply.listen(server()->address_services);
 
+	// Publish service events
+	publish_events.listen(server()->address_services);
+
+
 
 	// Start management thread
 	management.thread = std::thread(&Services::run_management_thread, this);
@@ -221,6 +225,12 @@ void Server::Services::run_management_thread()
 			auto route = to_close.front();
 			to_close.pop_front();
 			server->publish.subscribe.disconnect(route->path);
+
+			// Publish existence of new service?
+			auto bulletin = MsgWriter::Bulletin("*services", StatusCode::Gone);
+			bulletin.writeData(route->path);
+			publish_events.publish(bulletin.release());
+
 			delete route;
 		}
 
@@ -259,8 +269,13 @@ void Server::Services::run_management_thread()
 			try
 			{
 				Route &sockets = **map.emplace(spec.map_uri, new Route(*server, std::string(spec.map_uri))).first;
+
+				// Connect pub-sub
 				server->publish.subscribe.dial(spec.host);
+
+
 				sockets.dial(spec.host);
+
 				log << " ...OK" << endl;
 			}
 			catch (nng::exception e)
@@ -289,6 +304,11 @@ void Server::Services::run_management_thread()
 			notify.writeData(spec.map_uri);
 			notify.writeData("\nEnrolled with this URI.");
 			enlist_reply.respondTo(spec.queryID, notify.release());
+
+			// Publish existence of new service?
+			auto bulletin = MsgWriter::Bulletin("*services", StatusCode::Created);
+			bulletin.writeData(spec.map_uri);
+			publish_events.publish(bulletin.release());
 		}
 
 		management.cond.wait(lock);
