@@ -23,6 +23,9 @@ namespace telling
 	};
 
 
+	/*
+		Represents an HTTP method.
+	*/
 	class Method
 	{
 	public:
@@ -46,8 +49,33 @@ namespace telling
 		bool allowRequestBody()  const;
 		bool allowResponseBody() const;
 
+		// Does it make sense to use this method without a response?
+		bool allowNoResponse() const;
+
 		// Check method validity
 		explicit operator bool() const noexcept    {return code > MethodCode::None && code < MethodCode::EndOfValidMethods;}
+	};
+
+
+	/*
+		Represents a set of HTTP methods.
+	*/
+	class Methods
+	{
+	public:
+		uint32_t mask;
+
+	public:
+		void     clear     ()               noexcept    {mask = 0;}
+		void     insert    (Method m)       noexcept    {mask |=  (uint32_t(1u) << uint32_t(m.code));}
+		void     erase     (Method m)       noexcept    {mask &= ~(uint32_t(1u) << uint32_t(m.code));}
+		bool     contains  (Method m) const noexcept    {return (mask >> uint32_t(m.code)) & uint32_t(1u);}
+
+		Methods  operator+ (Method m) noexcept    {Methods r(*this); r.insert(m); return r;}
+		Methods  operator- (Method m) noexcept    {Methods r(*this); r.erase (m); return r;}
+
+		Methods& operator+=(Method m) noexcept    {insert(m); return *this;}
+		Methods& operator-=(Method m) noexcept    {erase (m); return *this;}
 	};
 
 
@@ -112,6 +140,21 @@ namespace telling
 		switch (code)
 		{
 		case MethodCode::HEAD:
+			return false;
+		default:
+			return true;
+		}
+	}
+
+	inline bool Method::allowNoResponse() const
+	{
+		switch (code)
+		{
+		case MethodCode::GET:
+		case MethodCode::HEAD:
+		case MethodCode::OPTIONS:
+		case MethodCode::CONNECT:
+		case MethodCode::TRACE:
 			return false;
 		default:
 			return true;

@@ -65,6 +65,8 @@ void MsgView::Request::_parse_request()
 	methodString = consumeToSpace(i, e);
 	uri          = consumeToSpace(i, e);
 	protocol     = consumeToEOL  (i, e);
+
+	method       = Method::Parse(methodString);
 }
 
 

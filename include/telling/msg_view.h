@@ -70,13 +70,11 @@ namespace telling
 		~Request() noexcept {}
 
 
-		Method method() const noexcept    {return Method::Parse(methodString);}
-
-
 		void _parse_request();
 
 
 	public:
+		Method           method;
 		std::string_view methodString;
 		std::string_view uri;
 		std::string_view protocol;

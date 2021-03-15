@@ -23,7 +23,7 @@ using std::endl;
 
 
 template<class T> void printStartLine(T &t) {cout << "\tStartLine: `" << t.startLine()  << "`" << endl;}
-template<class T> void printMethod   (T &t) {cout << "\tMethod:    `" << t.methodString << "` -- parsed as HTTP " << t.method() << endl;}
+template<class T> void printMethod   (T &t) {cout << "\tMethod:    `" << t.methodString << "` -- parsed as HTTP " << t.method << endl;}
 template<class T> void printURI      (T &t) {cout << "\tURI:       `" << t.uri          << "`" << endl;}
 template<class T> void printProtocol (T &t) {cout << "\tProtocol:  `" << t.protocol     << "`" << endl;}
 template<class T> void printStatus   (T &t) {cout << "\tStatus:    `" << t.statusString << "` -- parsed as HTTP " << t.status() << ' ' << t.status().reasonPhrase() << endl;}
