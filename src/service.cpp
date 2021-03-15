@@ -13,19 +13,19 @@ using namespace telling;
 Service_Base::Service_Base(std::string _uri, std::string_view serverID) :
 	uri(_uri)
 {
-	if (serverID.length()) enlist(serverID);
+	if (serverID.length()) registerURI(serverID);
 }
 
 Service_Base::~Service_Base()
 {
 }
 
-void Service_Base::enlist(std::string_view serverID)
+void Service_Base::registerURI(std::string_view serverID)
 {
-	if (enlistment)
-		throw nng::exception(nng::error::busy, "Service Enlistment already in progress.");
+	if (registration)
+		throw nng::exception(nng::error::busy, "Service Registration already in progress.");
 
-	enlistment.emplace(serverID, uri);
+	registration.emplace(serverID, uri);
 }
 
 

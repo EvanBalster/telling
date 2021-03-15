@@ -6,7 +6,7 @@
 using namespace telling;
 
 
-class Enlistment::Delegate : public AsyncQuery
+class Registration::Delegate : public AsyncQuery
 {
 public:
 	STATUS         status = INITIAL;
@@ -34,12 +34,12 @@ public:
 		}
 		else
 		{
-			const char *errSrc = "Enlistment Reply Status";
+			const char *errSrc = "Registration Reply Status";
 			nng::error errType = nng::error::internal;
 
 			if      (repStatus.isClientError())
 			{
-				errSrc = "Enlistment Request Error";
+				errSrc = "Registration Request Error";
 				switch (repStatus.code)
 				{
 				case HttpStatus::Code::Unauthorized: errType = nng::error::perm;      break;
@@ -51,15 +51,15 @@ public:
 			}
 			else if (repStatus.isServerError())
 			{
-				errSrc = "Enlistment Server Error";
+				errSrc = "Registration Server Error";
 			}
 			else if (repStatus.isInformational())
 			{
-				errSrc = "Enlistment Informational Reply";
+				errSrc = "Registration Informational Reply";
 			}
 			else if (repStatus.isRedirection())
 			{
-				errSrc = "Enlistment Redirection";
+				errSrc = "Registration Redirection";
 			}
 
 			status = FAILED;
@@ -70,47 +70,47 @@ public:
 	Directive asyncQuery_error(QueryID, nng::error error)      final
 	{
 		status = FAILED;
-		except = nng::exception(error, "Enlistment Networking Error");
+		except = nng::exception(error, "Registration Networking Error");
 		return CONTINUE;
 	}
 };
 
 
 
-Enlistment::Enlistment(
+Registration::Registration(
 	std::string_view serverID,
 	std::string_view serviceURI,
-	std::string_view serviceURI_enlist_as) :
+	std::string_view serviceURI_register_as) :
 	delegate(std::make_shared<Delegate>()),
 	requester(delegate)
 {
 	requester.dial(HostAddress::Base::InProc(serverID));
 
 	MsgWriter msg = MsgWriter::Request("*services", MethodCode::POST);
-	msg.writeData(serviceURI_enlist_as);
+	msg.writeData(serviceURI_register_as);
 	msg.writeData("\n");
 	msg.writeData(serviceURI);
 
 	requester.request(msg.release());
 }
-Enlistment::Enlistment(
+Registration::Registration(
 	std::string_view serverID,
 	std::string_view serviceURI) :
-	Enlistment(serverID, serviceURI, serviceURI)
+	Registration(serverID, serviceURI, serviceURI)
 {
 }
 
-Enlistment::~Enlistment()
+Registration::~Registration()
 {
 
 }
 
-Enlistment::STATUS Enlistment::status() const noexcept
+Registration::STATUS Registration::status() const noexcept
 {
 	return static_cast<Delegate*>(&*delegate)->status;
 }
 
-const nng::exception &Enlistment::exception() const noexcept
+const nng::exception &Registration::exception() const noexcept
 {
 	return static_cast<Delegate*>(&*delegate)->except;
 }

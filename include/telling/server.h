@@ -330,15 +330,15 @@ namespace telling
 
 			void run_management_thread();
 
-			class EnlistResponder;
-			friend class EnlistResponder;
-			std::shared_ptr<AsyncRespond> enlist_responder;
-			service::Reply_Async          enlist_reply;
+			class RegisterResponder;
+			friend class RegisterResponder;
+			std::shared_ptr<AsyncRespond> register_responder;
+			service::Reply_Async          register_reply;
 
-			std::unordered_map<PipeID, std::string> enlistmentMap;
+			std::unordered_map<PipeID, std::string> registrationMap;
 
-			AsyncOp::SendDirective enlistRequest(QueryID, nng::msg &&);
-			void                   enlistExpired(nng::pipe_view);
+			AsyncOp::SendDirective registerRequest(QueryID, nng::msg &&);
+			void                   registerExpired(nng::pipe_view);
 
 			service::Publish_Box publish_events;
 			

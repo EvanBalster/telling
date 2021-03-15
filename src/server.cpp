@@ -23,9 +23,9 @@ Server::~Server()
 
 void Server::open(const HostAddress::Base &base)
 {
-	Listen(base, reply, publish, pull);
+	Listen(base, reply.hostSocket(), publish.hostSocket(), pull.hostSocket());
 }
 void Server::close(const HostAddress::Base &base)
 {
-	Close(base, reply, publish, pull);
+	Disconnect(base, reply.hostSocket(), publish.hostSocket(), pull.hostSocket());
 }

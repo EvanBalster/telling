@@ -7,13 +7,13 @@ using namespace telling;
 using std::endl;
 
 
-class Server::Services::EnlistResponder : public AsyncRespond
+class Server::Services::RegisterResponder : public AsyncRespond
 {
 public:
 	std::mutex mtx;
 	Services *services;
 
-	EnlistResponder(Services *_services) : services(_services) {}
+	RegisterResponder(Services *_services) : services(_services) {}
 
 
 	SendDirective asyncRespond_recv(QueryID qid, nng::msg &&query)  final
@@ -21,7 +21,7 @@ public:
 		std::lock_guard gSelf(mtx);
 		if (!services) return TERMINATE;
 
-		return services->enlistRequest(qid, std::move(query));
+		return services->registerRequest(qid, std::move(query));
 	}
 	void asyncRespond_done(QueryID qid) final
 	{
@@ -36,7 +36,7 @@ public:
 		if (!services) return TERMINATE;
 
 		services->server()->log << services->Name()
-			<< ": Enlistment Responder error: " << nng::to_string(status) << std::endl;
+			<< ": Registration Responder error: " << nng::to_string(status) << std::endl;
 		return AsyncOp::AUTO;
 	}
 
@@ -47,7 +47,7 @@ public:
 
 		if (event == nng::pipe_ev::rem_post)
 		{
-			services->enlistExpired(pipe);
+			services->registerExpired(pipe);
 		}
 	}
 
@@ -60,14 +60,14 @@ public:
 
 
 Server::Services::Services() :
-	enlist_responder(std::make_shared<EnlistResponder>(this)),
-	enlist_reply(enlist_responder)
+	register_responder(std::make_shared<RegisterResponder>(this)),
+	register_reply(register_responder)
 {
 	map.burst_threshold(256);
 
 
 	// Responders may dial
-	enlist_reply.listen(server()->address_services);
+	register_reply.listen(server()->address_services);
 
 	// Publish service events
 	publish_events.listen(server()->address_services);
@@ -80,7 +80,7 @@ Server::Services::Services() :
 
 Server::Services::~Services()
 {
-	if (enlist_responder) static_cast<EnlistResponder*>(&*enlist_responder)->stop();
+	if (register_responder) static_cast<RegisterResponder*>(&*register_responder)->stop();
 
 	{
 		// Shut down management thread
@@ -92,7 +92,7 @@ Server::Services::~Services()
 	management.thread.join();
 }
 
-AsyncOp::SendDirective Server::Services::enlistRequest(QueryID queryID, nng::msg &&_msg)
+AsyncOp::SendDirective Server::Services::registerRequest(QueryID queryID, nng::msg &&_msg)
 {
 	auto server = this->server();
 	auto &log = server->log;
@@ -108,7 +108,7 @@ AsyncOp::SendDirective Server::Services::enlistRequest(QueryID queryID, nng::msg
 	{
 		log << Name() << ": message parse exception: " << e.what() << std::endl;
 
-		return e.writeReply("Service Enlistment Request Handler");
+		return e.writeReply("Service Registration Request Handler");
 	}
 
 	/*
@@ -146,16 +146,16 @@ AsyncOp::SendDirective Server::Services::enlistRequest(QueryID queryID, nng::msg
 		}
 
 		auto writer = MsgWriter::Reply(HttpStatus::Code::BadRequest);
-		writer.writeData("Malformed Enlistment Request Body.");
+		writer.writeData("Malformed Registration Request Body.");
 		return writer.release();
 	}
 
 
 	std::lock_guard<std::mutex> g(mtx);
 
-	// Add to enlistment map
+	// Add to registration map
 	auto pipeID = owned_msg.get_pipe().get().id;
-	enlistmentMap.emplace(pipeID, pathPrefix);
+	registrationMap.emplace(pipeID, pathPrefix);
 
 	/*
 		Kick off establishment of a new Route.
@@ -168,7 +168,7 @@ AsyncOp::SendDirective Server::Services::enlistRequest(QueryID queryID, nng::msg
 	return AsyncOp::CONTINUE;
 }
 
-void Server::Services::enlistExpired(nng::pipe_view pipe)
+void Server::Services::registerExpired(nng::pipe_view pipe)
 {
 	auto server = this->server();
 	auto &log = server->log;
@@ -181,17 +181,17 @@ void Server::Services::enlistExpired(nng::pipe_view pipe)
 
 	std::string path;
 	{
-		auto pipe_pos = enlistmentMap.find(pipeID);
-		if (pipe_pos == enlistmentMap.end())
+		auto pipe_pos = registrationMap.find(pipeID);
+		if (pipe_pos == registrationMap.end())
 		{
-			log << "... not enlisted." << endl;
-			enlistmentMap.erase(pipe_pos);
+			log << "... not registered." << endl;
+			registrationMap.erase(pipe_pos);
 			return;
 		}
 		log << "`" << pipe_pos->second << "`... " << endl;;
 
 		path = std::move(pipe_pos->second);
-		enlistmentMap.erase(pipe_pos);
+		registrationMap.erase(pipe_pos);
 	}
 
 	auto pos = map.find(path);
@@ -248,14 +248,14 @@ void Server::Services::run_management_thread()
 				log << Name() << ": already have `" << spec.map_uri << "`" << endl;
 
 				// Remove pipe
-				enlistmentMap.erase(spec.pipeID);
+				registrationMap.erase(spec.pipeID);
 
 				// Failed dialing... service unavailable
 				auto notify = MsgWriter::Reply(StatusCode::Conflict);
 				notify.writeHeader("Content-Type", "text/plain");
 				notify.writeData(std::string(spec.map_uri));
-				notify.writeData("\nThis URI is already enlisted.");
-				enlist_reply.respondTo(spec.queryID, notify.release());
+				notify.writeData("\nThis URI is already registered.");
+				register_reply.respondTo(spec.queryID, notify.release());
 
 				continue;
 			}
@@ -286,14 +286,14 @@ void Server::Services::run_management_thread()
 				map.erase(spec.map_uri);
 				
 				// Remove pipe
-				enlistmentMap.erase(spec.pipeID);
+				registrationMap.erase(spec.pipeID);
 
 				// Failed dialing... service unavailable
 				auto notify = MsgWriter::Reply(StatusCode::ServiceUnavailable);
 				notify.writeHeader("Content-Type", "text/plain");
 				notify.writeData(std::string(spec.host.base));
 				notify.writeData("\nCould not dial specified service URI.");
-				enlist_reply.respondTo(spec.queryID, notify.release());
+				register_reply.respondTo(spec.queryID, notify.release());
 
 				continue;
 			}
@@ -303,7 +303,7 @@ void Server::Services::run_management_thread()
 			notify.writeHeader("Content-Type", "text/plain");
 			notify.writeData(spec.map_uri);
 			notify.writeData("\nEnrolled with this URI.");
-			enlist_reply.respondTo(spec.queryID, notify.release());
+			register_reply.respondTo(spec.queryID, notify.release());
 
 			// Publish existence of new service?
 			auto bulletin = MsgWriter::Bulletin("*services", StatusCode::Created);

@@ -2,7 +2,7 @@
 
 #include <optional>
 
-#include "service_enlist.h"
+#include "service_registration.h"
 
 #include "service_reply.h"
 #include "service_pull.h"
@@ -23,15 +23,15 @@ namespace telling
 		const std::string         uri;
 		HostAddress::Base         inProcAddress() const noexcept    {return HostAddress::Base::InProc(uri);}
 
-		// Primary enlistment.  Additional enlistments under different URIs are allowed.
-		std::optional<Enlistment> enlistment;
+		// Primary registration.  Additional registrations under different URIs are allowed.
+		std::optional<Registration> registration;
 
 
 	public:
 		Service_Base(std::string _uri, std::string_view serverID = std::string_view());
 		virtual ~Service_Base();
 
-		void enlist(std::string_view serverID);
+		void registerURI(std::string_view serverID);
 
 
 		/*
@@ -63,8 +63,6 @@ namespace telling
 	public:
 		Service_Box(std::string _uri, std::string_view serverID = std::string_view());
 		~Service_Box() override;
-
-		void enlist(std::string_view serverID);
 
 
 		/*

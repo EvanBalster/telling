@@ -10,9 +10,9 @@
 namespace telling
 {
 	/*
-		Used to enlist services with a Server in the same process.
+		Used to register services with a Server in the same process.
 	*/
-	class Enlistment
+	class Registration
 	{
 	public:
 		enum STATUS
@@ -25,22 +25,22 @@ namespace telling
 
 
 	public:
-		Enlistment(
+		Registration(
 			std::string_view serverID,
 			std::string_view serviceURI);
-		Enlistment(
+		Registration(
 			std::string_view serverID,
 			std::string_view serviceURI,
-			std::string_view serviceURI_enlist_as);
-		~Enlistment();
+			std::string_view serviceURI_register_as);
+		~Registration();
 
 		/*
-			Check enlistment status.
+			Check registration status.
 		*/
 		STATUS                status()     const noexcept;
 		const nng::exception &exception()  const noexcept;
 		bool                  isWorking () const noexcept    {auto s=status(); return s==INITIAL || s==REQUESTED;}
-		bool                  isEnlisted() const noexcept    {return status() == ENLISTED;}
+		bool                  isRegistered() const noexcept    {return status() == ENLISTED;}
 
 
 	public:
