@@ -23,6 +23,7 @@
 #include "service_publish.h"
 #include "client_subscribe.h"
 #include "service_reply.h"
+#include "service_registration.h"
 
 
 namespace telling
@@ -34,10 +35,16 @@ namespace telling
 	using PrefixMap = tsl::htrie_map<char, value_type>;
 
 
+	/*
+		Telling server.
+			Handles URI routing to services as they register and vanish.
+			Propagates published messages to clients.
+			Allows for multiple methods of connectivity to an inproc network.
+	*/
 	class Server : public UsingPatternEnums
 	{
 	public:
-		Server(std::string ID, std::ostream *log = nullptr);
+		Server(std::ostream *log = nullptr, std::string_view ID = DefaultServerID());
 		~Server();
 
 		// TODO configure, start and stop endpoints

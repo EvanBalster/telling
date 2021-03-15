@@ -171,9 +171,6 @@ Content-Type:		application/json
 }
 
 
-static const std::string SERVER_NAME = "telling";
-
-
 int main(int argc, char **argv)
 {
 	nng::inproc::register_transport();
@@ -201,7 +198,7 @@ int main(int argc, char **argv)
 
 		cout << "==== Creating service." << endl;
 		{
-		Service_Box service(uri, SERVER_NAME);
+		Service_Box service(uri);
 
 		while (timerTotal < lifetime_ms)
 		{
@@ -241,14 +238,13 @@ int main(int argc, char **argv)
 			while (service.receive(msg))
 			{
 				++recvCount;
-				cout << "SVC-REP recv: ";
+				//cout << "SVC-REP recv: ";
 				try
 				{
 					MsgView::Request req(msg);
 					//printStartLine(req);
 					//printHeaders(req);
-					cout << "[" << req.startLine() << "] `" << req.dataString() << "`" << endl;
-					cout << endl;
+					//cout << "[" << req.startLine() << "] `" << req.dataString() << "`" << endl;
 
 					auto reply = MsgWriter::Reply();
 					reply.writeHeader("Content-Type", "text/plain");
@@ -312,7 +308,7 @@ int main(int argc, char **argv)
 	// Server needs no thread
 
 	cout << "==== Creating server." << endl;
-	auto server = std::make_shared<Server>(SERVER_NAME);
+	auto server = std::make_shared<Server>();
 
 
 	std::string service_uri = "/voices";

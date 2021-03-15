@@ -28,14 +28,14 @@ namespace telling
 
 
 	public:
-		Service_Base(std::string _uri, std::string_view serverID = std::string_view());
+		Service_Base(std::string _uri, std::string_view serverID = DefaultServerID());
 		virtual ~Service_Base();
 
 		void registerURI(std::string_view serverID);
 
 
 		/*
-			Services can use serverID instead of manually listening.
+			Services typically register with a server rather than listening.
 				It is unusual but possible for a service to dial a listening client.
 				When a client is connected directly to a service, no URI routing occurs.
 		*/
@@ -61,7 +61,7 @@ namespace telling
 	class Service_Box : public Service_Base
 	{
 	public:
-		Service_Box(std::string _uri, std::string_view serverID = std::string_view());
+		Service_Box(std::string _uri, std::string_view serverID = DefaultServerID());
 		~Service_Box() override;
 
 
@@ -196,7 +196,7 @@ namespace telling
 
 	public:
 		Service_Async(std::shared_ptr<Handler> handler,
-			std::string _uri, std::string_view serverID = std::string_view());
+			std::string _uri, std::string_view serverID = DefaultServerID());
 		~Service_Async();
 
 		/*

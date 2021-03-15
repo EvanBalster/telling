@@ -25,7 +25,7 @@ void Service_Base::registerURI(std::string_view serverID)
 	if (registration)
 		throw nng::exception(nng::error::busy, "Service Registration already in progress.");
 
-	registration.emplace(serverID, uri);
+	registration.emplace(uri, uri, serverID);
 }
 
 

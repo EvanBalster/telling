@@ -78,26 +78,22 @@ public:
 
 
 Registration::Registration(
-	std::string_view serverID,
-	std::string_view serviceURI,
-	std::string_view serviceURI_register_as) :
+	std::string_view servicePath,
+	std::string_view servicePath_alias,
+	std::string_view serverID) :
 	delegate(std::make_shared<Delegate>()),
 	requester(delegate)
 {
 	requester.dial(HostAddress::Base::InProc(serverID));
 
+	if (!servicePath_alias.length()) servicePath_alias = servicePath;
+
 	MsgWriter msg = MsgWriter::Request("*services", MethodCode::POST);
-	msg.writeData(serviceURI_register_as);
+	msg.writeData(servicePath_alias);
 	msg.writeData("\n");
-	msg.writeData(serviceURI);
+	msg.writeData(servicePath);
 
 	requester.request(msg.release());
-}
-Registration::Registration(
-	std::string_view serverID,
-	std::string_view serviceURI) :
-	Registration(serverID, serviceURI, serviceURI)
-{
 }
 
 Registration::~Registration()

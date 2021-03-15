@@ -158,7 +158,7 @@ namespace telling
 		case 0:
 			return MethodCode::None;
 		case 1:
-			// TODO consider fast single-byte method codes for internal use
+			// TODO consider nonstandard single-byte method codes for internal use
 			return MethodCode::Unknown;
 		default:
 			switch (detail::CC2(v[0], v[1]))
