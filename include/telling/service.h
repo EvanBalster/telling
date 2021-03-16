@@ -2,59 +2,12 @@
 
 #include <optional>
 
-#include "service_registration.h"
-
-#include "service_reply.h"
-#include "service_pull.h"
-#include "service_publish.h"
-
-#include "client_request.h"
+#include "service_base.h"
+#include "msg_view.h"
 
 
 namespace telling
 {
-	/*
-		Base class for Services.
-	*/
-	class Service_Base
-	{
-	public:
-		// In-process URI.
-		const std::string         uri;
-		HostAddress::Base         inProcAddress() const noexcept    {return HostAddress::Base::InProc(uri);}
-
-		// Primary registration.  Additional registrations under different URIs are allowed.
-		std::optional<Registration> registration;
-
-
-	public:
-		Service_Base(std::string _uri, std::string_view serverID = DefaultServerID());
-		virtual ~Service_Base();
-
-		void registerURI(std::string_view serverID);
-
-
-		/*
-			Services typically register with a server rather than listening.
-				It is unusual but possible for a service to dial a listening client.
-				When a client is connected directly to a service, no URI routing occurs.
-		*/
-		void dial         (const HostAddress::Base &base)             {Dial      (base, replier(), publisher(), puller());}
-		void listen       (const HostAddress::Base &base)             {Listen    (base, replier(), publisher(), puller());}
-		void disconnect   (const HostAddress::Base &base) noexcept    {Disconnect(base, replier(), publisher(), puller());}
-		void disconnectAll()                              noexcept    {DisconnectAll   (replier(), publisher(), puller());}
-		void close        ()                              noexcept    {Close           (replier(), publisher(), puller());}
-
-
-		/*
-			Access individual communicators.
-		*/
-		virtual service::Reply_Base   *replier()   noexcept = 0;
-		virtual service::Publish_Base *publisher() noexcept = 0;
-		virtual service::Pull_Base    *puller()    noexcept = 0;
-	};
-
-
 	/*
 		A non-blocking service which is checked like a mailbox.
 	*/
@@ -104,98 +57,66 @@ namespace telling
 
 
 	/*
+		This service handler parses incoming Requests and separates them by Method.
+	*/
+	class Reactor : public ServiceHandler
+	{
+	public:
+		virtual ~Reactor() {}
+
+
+	protected:
+		/*
+			Services must always implement GET requests (but may decline them).
+				The semantics of these methods are as defined in HTTP.
+				The CONNECT method is not supported.
+
+			Requests have non-zero QueryID and support immediate or delayed replies.
+				Reply immediately by returning an nng::msg&& from the function.
+				Reply later by using the QueryID with calls to Service_Async,
+
+			Push messages will have a QueryID of 0 and don't support replying.
+				Push/Pull messages that don't satisfy Method::allowNoResponse will be ignored.
+		*/
+
+		// Return the set of allowed methods.
+		virtual Methods       allowed() const noexcept = 0;
+
+		// Safe methods (no PUSH support)
+		virtual SendDirective recv_get    (QueryID id, const MsgView::Request &req, nng::msg &&msg) = 0;
+		virtual SendDirective recv_head   (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual SendDirective recv_trace  (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual SendDirective recv_options(QueryID id, const MsgView::Request &req, nng::msg &&msg);
+
+		// Idempotent methods
+		virtual SendDirective recv_put    (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual SendDirective recv_delete (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+
+		// Other methods
+		virtual SendDirective recv_patch  (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual SendDirective recv_post   (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+
+		// Undefined (as of HTTP/1.1) method names
+		virtual SendDirective recv_UNKNOWN(QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+
+
+	protected:
+		// Implementation...
+		SendDirective _handle     (QueryID,    nng::msg &&);
+		Directive     pull_recv   (            nng::msg &&request) override;
+		SendDirective request_recv(QueryID id, nng::msg &&request) override;
+
+		std::mutex    reactor_mtx;
+	};
+
+
+	/*
 		A service which receives and responds to messages using asynchronous events.
 	*/
 	class Service_Async : public Service_Base
 	{
 	public:
-		/*
-			Asynchronous events are delivered to a delegate object.
-		*/
-		class Handler :
-			public AsyncSend,
-			public AsyncRecv,
-			public AsyncRespond
-		{
-		public:
-			virtual ~Handler() {}
-
-			using SendDirective = AsyncOp::SendDirective;
-			using Directive     = AsyncOp::Directive;
-
-
-		protected:
-			// Receive a pull message.
-			// There is no method for replying.
-			virtual Directive     pull_recv (nng::msg &&request) = 0;
-			virtual Directive     pull_error(nng::error)         {}
-
-			// Receive a request.
-			// May respond immediately (return a msg) or later (via respondTo).
-			virtual SendDirective request_recv (QueryID id, nng::msg &&request) = 0;
-
-			// Reply processing status (optional).
-			// reply_error may be also be triggered if there is some error receiving a request.
-			virtual void          reply_sent (QueryID id)                {}
-			virtual Directive     reply_error(QueryID id, nng::error)    {return AsyncOp::TERMINATE;}
-
-			// Publish outbox status (optional)
-			virtual SendDirective publish_sent ()              {}
-			virtual SendDirective publish_error(nng::error)    {return AsyncOp::TERMINATE;}
-
-			// Optionally receive pipe events from the various sockets.
-			virtual void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) {}
-
-
-		private:
-			SendQueueMtx publishQueue;
-
-			// AsyncRespond impl.
-			SendDirective asyncRespond_recv (QueryID qid, nng::msg &&m)    final    {return this->request_recv(qid, std::move(m));}
-			void          asyncRespond_done (QueryID qid)                  final    {this->reply_sent(qid);}
-			Directive     asyncRespond_error(QueryID qid, nng::error e)    final    {return this->reply_error(qid, e);}
-
-			// AsyncRecv (Pull) impl.
-			Directive asyncRecv_msg  (nng::msg &&msg   ) final    {return this->pull_recv(std::move(msg));}
-			Directive asyncRecv_error(nng::error status) final    {return this->pull_error(status);}
-
-			// AsyncSend (Publish) impl.
-			SendDirective asyncSend_msg  (nng::msg &&msg)    final;
-			SendDirective asyncSend_sent ()                  final;
-			SendDirective asyncSend_error(nng::error status) final    {return this->publish_error(status);}
-		};
-
-		/*
-			A convenience variant of Handler, allowing for simpler implementations.
-		*/
-		class Handler_Ex : public Handler
-		{
-		public:
-			virtual ~Handler_Ex() {}
-
-
-			/*
-				Receive push messages and requests via one method.
-					Incoming messages should be formatted as MsgView::Request.
-					Push messages will have a QueryID of 0 and don't support replying.
-					Requests have non-zero QueryID and support immediate or delayed replies.
-
-				Alternatively, override pull_recv and request_recv separately.
-			*/
-			virtual SendDirective recv(QueryID id, nng::msg &&msg) = 0;
-
-
-		protected:
-			// Implementation...
-			Directive     pull_recv   (            nng::msg &&request) override
-				{auto d=recv(QueryID(0), std::move(request)); return d.directive;}
-			SendDirective request_recv(QueryID id, nng::msg &&request) override
-				{return recv(id, std::move(request));}
-		};
-
-
-	public:
-		Service_Async(std::shared_ptr<Handler> handler,
+		Service_Async(std::shared_ptr<ServiceHandler_Base> handler,
 			std::string _uri, std::string_view serverID = DefaultServerID());
 		~Service_Async();
 

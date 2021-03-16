@@ -38,6 +38,9 @@ namespace telling
 		//void addContentLength();
 		void writeHeader(std::string_view name, std::string_view value);
 
+		// Specific headers
+		void writeHeader_Allowed(Methods methods);
+
 
 		/*
 			STEP 3: append body data as desired.

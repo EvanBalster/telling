@@ -143,3 +143,28 @@ void MsgWriter::setNNGHeader(nng::view data)
 	msg.header().clear();
 	msg.header().append(data);
 }
+
+
+
+void MsgWriter::writeHeader_Allowed(Methods methods)
+{
+	std::string allowed;
+
+	MethodCode m = MethodCode::None;
+
+	bool first = true;
+	while (true)
+	{
+		m = MethodCode(unsigned(m)+1);
+		if (m >= MethodCode::EndOfValidMethods) break;
+
+		if (methods.contains(m))
+		{
+			if (first) first = false;
+			else       allowed.append(", ");
+			allowed.append(Method(m).toString());
+		}
+	}
+
+	writeHeader("Allowed", allowed);
+}

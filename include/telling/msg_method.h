@@ -63,13 +63,20 @@ namespace telling
 	class Methods
 	{
 	public:
-		uint32_t mask;
+		using mask_t = uint32_t;
+		mask_t mask = 0;
 
 	public:
+		Methods()             noexcept    {}
+		Methods(MethodCode m) noexcept    {insert(m);}
+		Methods(Method     m) noexcept    {insert(m);}
+
+		static Methods All() noexcept    {Methods m; m.mask = ~mask_t(1u); return m;}
+
 		void     clear     ()               noexcept    {mask = 0;}
-		void     insert    (Method m)       noexcept    {mask |=  (uint32_t(1u) << uint32_t(m.code));}
-		void     erase     (Method m)       noexcept    {mask &= ~(uint32_t(1u) << uint32_t(m.code));}
-		bool     contains  (Method m) const noexcept    {return (mask >> uint32_t(m.code)) & uint32_t(1u);}
+		void     insert    (Method m)       noexcept    {if (m.code > MethodCode::None) mask |=  (mask_t(1u) << mask_t(m.code));}
+		void     erase     (Method m)       noexcept    {mask &= ~(mask_t(1u) << mask_t(m.code));}
+		bool     contains  (Method m) const noexcept    {return (mask >> mask_t(m.code)) & mask_t(1u);}
 
 		Methods  operator+ (Method m) noexcept    {Methods r(*this); r.insert(m); return r;}
 		Methods  operator- (Method m) noexcept    {Methods r(*this); r.erase (m); return r;}
@@ -77,6 +84,15 @@ namespace telling
 		Methods& operator+=(Method m) noexcept    {insert(m); return *this;}
 		Methods& operator-=(Method m) noexcept    {erase (m); return *this;}
 	};
+
+
+	inline Methods operator+(Method a, Method b) noexcept
+	{
+		Methods m;
+		m.insert(a);
+		m.insert(b);
+		return m;
+	}
 
 
 	/*
