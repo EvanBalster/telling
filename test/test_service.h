@@ -13,7 +13,7 @@ namespace telling_test
 	class Test_Responder : public Service_Async
 	{
 	public:
-		class Receiver : public Service_Async::Handler_Ex
+		class Receiver : public Reactor
 		{
 		public:
 			std::mutex         mtx;
@@ -25,7 +25,7 @@ namespace telling_test
 			Receiver(Test_Responder &_service, std::string _reply) : service(&_service), txt_reply(_reply) {}
 			~Receiver() {}
 
-			SendDirective recv(QueryID queryID, nng::msg &&msg) final
+			SendDirective recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
 			{
 				MsgView::Request req;
 				try
@@ -83,7 +83,7 @@ namespace telling_test
 	class Test_Reflector : public Service_Async
 	{
 	public:
-		class Receiver : public Service_Async::Handler_Ex
+		class Receiver : public Reactor
 		{
 		public:
 			std::mutex         mtx;
@@ -93,7 +93,7 @@ namespace telling_test
 			Receiver(Test_Reflector &_service) : service(&_service) {}
 			~Receiver() {}
 
-			SendDirective recv(QueryID queryID, nng::msg &&msg) final
+			SendDirective recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
 			{
 				MsgView::Request req;
 				try
