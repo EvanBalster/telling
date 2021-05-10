@@ -9,6 +9,8 @@
 #include <nngpp/http/client.h>
 #include <nngpp/http/conn.h>
 #include <nngpp/http/res.h>
+#include <nngpp/transport/tls.h>
+#include <nngpp/transport/tls/config.h>
 #include <nngpp/url.h>
 
 #include "async_query.h"
@@ -89,6 +91,7 @@ namespace telling
 
 	protected:
 		nng::http::client client;
+		nng::tls::config  tls;
 
 		std::shared_ptr<Handler> _handler;
 

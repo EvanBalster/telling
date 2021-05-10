@@ -42,7 +42,7 @@ void printHeaders(const MsgView &msg)
 }
 void printBody(const MsgView &msg)
 {
-	cout << "/----------------------------------------------------------------\\" << endl;
+	cout << "/----------------------------------------------------------------\\ " << msg.data().size() << endl;
 	cout << std::string_view((char*) msg.data().data(), msg.data().size()) << endl;
 	cout << "\\----------------------------------------------------------------/" << endl;
 }
@@ -179,16 +179,18 @@ int main(int argc, char **argv)
 {
 	nng::inproc::register_transport();
 	nng::tcp::register_transport();
+	nng::tls::register_transport();
 
 
 	cout << endl;
 	cout << "********* HTTP TEST BEGIN *********" << endl;
 	try
 	{
-		HttpClient_Box httpClient(nng::url("http://imitone.com"));
+		HttpClient_Box httpClient(nng::url("https://imitone.com"));
 
 		MsgWriter wreq(Http);
-		wreq.startRequest("/mothership/error_query.php");
+		//wreq.startRequest("/mothership/error_query.php");
+		wreq.startRequest("/activate.php");
 		wreq.writeHeader("Host", "imitone.com");
 		//wreq.writeHeader_Length();
 

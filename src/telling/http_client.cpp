@@ -45,6 +45,14 @@ HttpClient_Async::HttpClient_Async(std::shared_ptr<Handler> handler, nng::url &&
 	client(host),
 	_handler(handler)
 {
+	if (this->host->u_scheme == std::string_view("https"))
+	{
+		tls = nng::tls::config(nng::tls::mode::client);
+		tls.config_auth_mode(nng::tls::auth_mode::none);
+		//tls.config_ca_chain()
+		//tls. ;
+		client.set_tls(tls);
+	}
 }
 HttpClient_Async::~HttpClient_Async()
 {
@@ -163,6 +171,7 @@ void HttpClient_Async::Action::_callback(void *_action)
 		break;
 	case RECV:
 		// Receive the response
+		action->res.body().chop(action->res.body().size() - action->aio.count());
 		directive = handler->httpQuery_done(action->queryID, std::move(action->res));
 		action->res = nng::msg();
 		cleanup = true;
