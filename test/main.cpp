@@ -17,7 +17,6 @@
 #include <telling/service.h>
 #include <telling/client.h>
 
-#include <telling/http.h>
 #include <telling/http_client.h>
 
 
