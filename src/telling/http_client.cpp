@@ -1,35 +1,29 @@
-#include <unordered_map>
+#include <nngpp/aio.h>
 
-#include <telling/client_request.h>
-#include <nngpp/protocol/req0.h>
+#include <telling/http_client.h>
 
 
 using namespace telling;
-using namespace telling::client;
 
 
-/*
-	Request implementation
-*/
-
-
-struct Req_Async::Action
+struct HttpClient_Async::Action
 {
 	friend class Request;
 
-	Req_Async* const       request;
-	nng::aio               aio;
-	nng::ctx               ctx;
-	ACTION_STATE           state;
-	//std::promise<nng::msg> promise;
-
-	QueryID queryID() const noexcept    {return ctx.get().id;}
+	HttpClient_Async* const client;
+	QueryID                 queryID;
+	nng::aio                aio;
+	nng_iov                 iov;
+	nng::msg                req;
+	nng::msg                res;
+	nng::http::conn         conn;
+	ACTION_STATE            state;
 
 	static void _callback(void*);
 };
 
 
-Req_Base::MsgStats Req_Async::msgStats() const noexcept
+HttpClient_Async::MsgStats HttpClient_Async::msgStats() const noexcept
 {
 	std::lock_guard<std::mutex> g(mtx);
 
@@ -46,7 +40,13 @@ Req_Base::MsgStats Req_Async::msgStats() const noexcept
 }
 
 
-Req_Async::~Req_Async()
+HttpClient_Async::HttpClient_Async(std::shared_ptr<Handler> handler, nng::url &&_host) :
+	HttpClient_Base(std::move(_host)),
+	client(host),
+	_handler(handler)
+{
+}
+HttpClient_Async::~HttpClient_Async()
 {
 	// Cancel all active AIO
 	{
@@ -73,11 +73,10 @@ Req_Async::~Req_Async()
 	}
 }
 
-QueryID Req_Async::request(nng::msg &&msg)
-{
-	if (!isReady())
-		throw nng::exception(nng::error::closed, "Push Communicator is not ready.");
 
+
+QueryID HttpClient_Async::request(nng::msg &&req)
+{
 	Action *action = nullptr;
 
 	// Allocate.
@@ -87,7 +86,6 @@ QueryID Req_Async::request(nng::msg &&msg)
 		if (idle.empty())
 		{
 			action = new Action{this};
-			action->ctx = make_ctx();
 			action->aio = nng::make_aio(&Action::_callback, action);
 		}
 		else
@@ -96,7 +94,9 @@ QueryID Req_Async::request(nng::msg &&msg)
 			idle.pop_front();
 		}
 
-		auto directive = _delegate->asyncQuery_made(action->queryID(), msg);
+		action->queryID = nextQueryID++;
+
+		auto directive = _handler->httpQuery_made(action->queryID, req);
 
 		switch (directive)
 		{
@@ -111,24 +111,24 @@ QueryID Req_Async::request(nng::msg &&msg)
 		case AsyncOp::AUTO:
 		case AsyncOp::CONTINUE:
 		default:
-			action->state = SEND;
+			action->state = CONNECT;
 			active.insert(action);
 			break;
 		}
 	} // Release lock
+	
+	// Stow request and connect...
+	action->req = std::move(req);
+	action->client->client.connect(action->aio);
 
-	// Prepare send
-	action->aio.set_msg(std::move(msg));
-	action->ctx.send(action->aio);
-
-	return action->queryID();
+	return action->queryID;
 }
 
-void Req_Async::Action::_callback(void *_action)
+void HttpClient_Async::Action::_callback(void *_action)
 {
-	auto action = static_cast<Req_Async::Action*>(_action);
-	auto comm = action->request;
-	auto &delegate = comm->_delegate;
+	auto action = static_cast<HttpClient_Async::Action*>(_action);
+	auto client = action->client;
+	auto &handler = client->_handler;
 
 	AsyncOp::DIRECTIVE directive;
 	bool cleanup = false;
@@ -142,7 +142,7 @@ void Req_Async::Action::_callback(void *_action)
 	case nng::error::timedout:
 	default:
 		// Causes the query to be canceled.
-		directive = delegate->asyncQuery_error(action->queryID(), error);
+		directive = handler->httpQuery_error(action->queryID, error);
 		cleanup = true;
 		break;
 	}
@@ -151,13 +151,20 @@ void Req_Async::Action::_callback(void *_action)
 	if (error == nng::error::success)
 		switch (action->state)
 	{
+	case CONNECT:
+		action->conn = nng::http::conn(action->aio.get_output<nng_http_conn>(0));
+		handler->httpConn_open(action->conn);
+		directive = AsyncOp::CONTINUE;
+		break;
 	case SEND:
 		// Send
-		directive = delegate->asyncQuery_sent(action->queryID());
+		directive = handler->httpQuery_sent(action->queryID);
+		action->req = nng::msg();
 		break;
 	case RECV:
 		// Receive the response
-		directive = delegate->asyncQuery_done(action->queryID(), action->aio.release_msg());
+		directive = handler->httpQuery_done(action->queryID, std::move(action->res));
+		action->res = nng::msg();
 		cleanup = true;
 	default:
 	case IDLE:
@@ -173,21 +180,41 @@ void Req_Async::Action::_callback(void *_action)
 
 	if (cleanup)
 	{
-		// Clear AIO message
-		action->aio.set_msg(nullptr);
+		if (action->conn)
+		{
+			// Disconnect
+			handler->httpConn_close(action->conn);
+			action->conn = nng::http::conn();
+		}
+
+		// Clean up
+		action->req = nng::msg();
+		action->res = nng::msg();
 	}
 
 
-	std::lock_guard<std::mutex> lock(comm->mtx);
+	std::lock_guard<std::mutex> lock(client->mtx);
 
 	if (cleanup) action->state = IDLE;
 
 	switch (action->state)
 	{
+	case CONNECT:
+		// Connection made; send request.
+		action->state = SEND;
+		action->iov = nng_iov{action->req.body().get().data(), action->req.body().size()};
+		action->aio.set_iov(action->iov);
+		//action->aio.set_msg(std::move(action->req));
+		action->conn.write(action->aio);
+		break;
+
 	case SEND:
 		// Request sent; listen for response.
 		action->state = RECV;
-		action->ctx.recv(action->aio);
+		action->res = nng::make_msg(4096);
+		action->iov = action->iov = nng_iov{action->res.body().get().data(), action->res.body().size()};
+		action->aio.set_iov(action->iov);
+		action->conn.read(action->aio);
 		break;
 
 	case RECV:
@@ -200,9 +227,9 @@ void Req_Async::Action::_callback(void *_action)
 
 	case IDLE:
 		// Move action to idle queue
-		comm->active.erase(action);
-		comm->idle.push_back(action);
-	}	
+		client->active.erase(action);
+		client->idle.push_back(action);
+	}
 }
 
 
@@ -212,7 +239,7 @@ void Req_Async::Action::_callback(void *_action)
 */
 
 
-class Req_Box::Delegate : public AsyncQuery
+class HttpClient_Box::Delegate : public HttpClient_Async::Handler
 {
 public:
 	struct Pending
@@ -225,6 +252,8 @@ public:
 	std::unordered_map<QueryID, Pending> pending;
 
 	QueryID newQueryID = 0;
+
+	bool connected = false;
 
 	Delegate() {}
 	~Delegate() {}
@@ -243,8 +272,11 @@ public:
 		return pos->second.promise.get_future();
 	}
 
-	
-	Directive asyncQuery_made (QueryID qid, const nng::msg &query) final
+
+	void httpConn_open  (conn_view conn) final    {connected = true;}
+	void httpConn_close (conn_view conn) final    {}
+
+	Directive httpQuery_made(QueryID qid, const nng::msg &query) final
 	{
 		// TODO could more cheaply allocate nng::msg?
 		std::lock_guard g(mtx);
@@ -253,13 +285,13 @@ public:
 
 		return CONTINUE;
 	}
-	Directive asyncQuery_sent (QueryID qid)                        final
+	Directive httpQuery_sent (QueryID qid)                        final
 	{
 		auto pos = pending.find(qid);
 		if (pos != pending.end()) pos->second.sent = true;
 		return CONTINUE;
 	}
-	Directive asyncQuery_done (QueryID qid, nng::msg &&response)   final
+	Directive httpQuery_done (QueryID qid, nng::msg &&response)   final
 	{
 		std::lock_guard g(mtx);
 
@@ -275,16 +307,19 @@ public:
 			return DECLINE;
 		}
 	}
-	Directive asyncQuery_error(QueryID qid, nng::error status)     final
+	Directive httpQuery_error(QueryID qid, nng::error status)     final
 	{
 		std::lock_guard g(mtx);
 		auto pos = pending.find(qid);
 		if (pos != pending.end())
 		{
 			pos->second.promise.set_exception(std::make_exception_ptr(
-				nng::exception(status, pos->second.sent
-					? "Request could not be fulfilled."
-					: "Request could not be sent.")));
+				nng::exception(status,
+					connected
+					? (pos->second.sent
+						? "HTTP response reception"
+						: "HTTP request transmission")
+					: "HTTP connection establishment")));
 			pending.erase(pos);
 		}
 
@@ -292,13 +327,14 @@ public:
 	}
 };
 
-
-Req_Box::Req_Box()                     : Req_Async(std::make_shared<Delegate>()) {}
-Req_Box::Req_Box(const Req_Base &o)    : Req_Async(std::make_shared<Delegate>(), o) {}
-Req_Box::~Req_Box()                    {}
-
-std::future<nng::msg> Req_Box::request(nng::msg &&msg)
+HttpClient_Box::HttpClient_Box(nng::url &&_host) :
+	HttpClient_Async(std::make_shared<Delegate>(), std::move(_host))
 {
-	auto qid = this->Request_Async::request(std::move(msg));
-	return static_cast<Delegate*>(&*_delegate)->getFuture(qid);
+
+}
+
+std::future<nng::msg> HttpClient_Box::request(nng::msg &&msg)
+{
+	auto qid = this->HttpClient_Async::request(std::move(msg));
+	return static_cast<Delegate*>(&*_handler)->getFuture(qid);
 }

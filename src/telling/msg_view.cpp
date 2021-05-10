@@ -62,11 +62,12 @@ void MsgView::Request::_parse_request()
 		}
 	};
 		
-	methodString = consumeToSpace(i, e);
-	uri          = consumeToSpace(i, e);
-	protocol     = consumeToEOL  (i, e);
+	methodString   = consumeToSpace(i, e);
+	uri            = consumeToSpace(i, e);
+	protocolString = consumeToEOL  (i, e);
 
-	method       = Method::Parse(methodString);
+	method         =      Method::Parse(methodString);
+	protocol       = MsgProtocol::Parse(protocolString);
 }
 
 
@@ -99,7 +100,8 @@ void MsgView::Reply::_parse_reply()
 		}
 	};
 
-	protocol = consumeToSpace(i, e);
+	protocolString = consumeToSpace(i, e);
+	protocol       = MsgProtocol::Parse(protocolString);
 
 	// 3-digit status code...
 	if (i + 4 > e) throw MsgException(MsgError::START_LINE_MALFORMED, bol, e-bol);
@@ -150,8 +152,9 @@ void MsgView::Bulletin::_parse_bulletin()
 		}
 	};
 
-	uri      = consumeToSpace(i, e);
-	protocol = consumeToSpace(i, e);
+	uri            = consumeToSpace(i, e);
+	protocolString = consumeToSpace(i, e);
+	protocol       = MsgProtocol::Parse(protocolString);
 
 	// 3-digit status code...
 	if (i + 4 > e) throw MsgException(MsgError::START_LINE_MALFORMED, bol, e-bol);

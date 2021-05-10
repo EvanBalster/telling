@@ -7,6 +7,7 @@
 #include "msg_util.h"
 #include "msg_status.h"
 #include "msg_method.h"
+#include "msg_protocol.h"
 
 
 namespace telling
@@ -14,6 +15,8 @@ namespace telling
 	class MsgWriter
 	{
 	public:
+		MsgWriter(MsgProtocol protocol = Telling);
+
 		/*
 			STEP 1: call one of these methods to begin the message.
 		*/
@@ -38,8 +41,9 @@ namespace telling
 		//void addContentLength();
 		void writeHeader(std::string_view name, std::string_view value);
 
-		// Specific headers
+		// Specific headers...
 		void writeHeader_Allowed(Methods methods);
+		void writeHeader_Length (size_t  maxLength = ~uint32_t(0));
 
 
 		/*
@@ -64,10 +68,16 @@ namespace telling
 		void setNNGHeader(nng::view data);
 
 
+	public:
+		MsgProtocol protocol;
+		bool        crlf = false;
+
 	private:
 		nng::msg msg;
 		size_t dataOffset = 0;
 		size_t contentLengthOffset = 0;
+
+		size_t lengthOffset = 0, lengthSize = 0;
 
 		void _startMsg();
 		void _autoCloseHeaders();

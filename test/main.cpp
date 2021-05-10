@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <thread>
 #include <chrono>
 #include <list>
@@ -7,6 +8,7 @@
 //#include <telling/client.h>
 
 #include <nngpp/transport/inproc.h>
+#include <nngpp/transport/tcp.h>
 
 #include <telling/msg_writer.h>
 #include <telling/msg_view.h>
@@ -14,6 +16,9 @@
 #include <telling/server.h>
 #include <telling/service.h>
 #include <telling/client.h>
+
+#include <telling/http.h>
+#include <telling/http_client.h>
 
 
 using namespace telling;
@@ -174,6 +179,44 @@ Content-Type:		application/json
 int main(int argc, char **argv)
 {
 	nng::inproc::register_transport();
+	nng::tcp::register_transport();
+
+
+	cout << endl;
+	cout << "********* HTTP TEST BEGIN *********" << endl;
+	try
+	{
+		HttpClient_Box httpClient(nng::url("http://imitone.com"));
+
+		MsgWriter wreq(Http);
+		wreq.startRequest("/mothership/error_query.php");
+		wreq.writeHeader("Host", "imitone.com");
+		//wreq.writeHeader_Length();
+
+		nng::msg reqMsg = wreq.release();
+
+		{
+			std::ofstream out("http_request.txt", std::ios::binary);
+			out.write(reqMsg.body().get().data<char>(), reqMsg.body().size());
+		}
+
+		cout << "HTTP REQUEST COMPOSED:" << endl;
+		print(MsgView::Request(reqMsg));
+
+		auto replyPromise = httpClient.request(std::move(reqMsg));
+
+		cout << "HTTP AWAIT REPLY..." << endl;
+		auto repMsg = replyPromise.get();
+
+		print(MsgView::Reply(repMsg));
+	}
+	catch (nng::exception e)
+	{
+		cout << "Exception in HTTP request: " << e.what() << endl
+			<< "\tcontext: " << e.who() << endl;
+	}
+	cout << "********* HTTP TEST END *********" << endl;
+	cout << endl;
 
 
 	/*test_message_parsers();

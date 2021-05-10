@@ -4,6 +4,7 @@
 #include "msg_headers.h"
 #include "msg_method.h"
 #include "msg_status.h"
+#include "msg_protocol.h"
 
 
 namespace telling
@@ -77,7 +78,8 @@ namespace telling
 		Method           method;
 		std::string_view methodString;
 		std::string_view uri;
-		std::string_view protocol;
+		MsgProtocol      protocol;
+		std::string_view protocolString;
 	};
 
 
@@ -97,7 +99,8 @@ namespace telling
 
 
 	public:
-		std::string_view protocol;
+		MsgProtocol      protocol;
+		std::string_view protocolString;
 		std::string_view statusString;
 		std::string_view reason;
 	};

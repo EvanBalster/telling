@@ -18,14 +18,13 @@ namespace telling
 		// Base type for Request clients.
 		using Req_Pattern = Communicator::Pattern_Base<Role::CLIENT, Pattern::REQ_REP>;
 
-		// Base type for Subscribe clients.
+		// Base type for Request clients.
 		class Req_Base : public Req_Pattern
 		{
 		public:
 			Req_Base(std::shared_ptr<AsyncOp_withPipeEvents> p)    : Req_Pattern(p)           {}
 			Req_Base(const Req_Base &shareSocket)                  : Req_Pattern(shareSocket) {}
 			~Req_Base() {}
-
 			
 			
 			/*
@@ -81,21 +80,7 @@ namespace telling
 				RECV = 2,
 			};
 
-			struct Action
-			{
-				friend class Request;
-
-				Req_Async* const       request;
-				nng::aio               aio;
-				nng::ctx               ctx;
-				ACTION_STATE           state;
-				//std::promise<nng::msg> promise;
-
-				QueryID queryID() const noexcept    {return ctx.get().id;}
-
-				static void _callback(void*);
-			};
-
+			struct Action;
 			friend struct Action;
 			mutable std::mutex          mtx;
 			std::unordered_set<Action*> active;

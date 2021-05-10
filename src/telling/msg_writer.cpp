@@ -9,11 +9,39 @@ using namespace telling;
 */
 
 
+static size_t NumDigits(size_t value)
+{
+	size_t digits = 0;
+	do {++digits; value /= 10;} while (value);
+	return digits;
+}
+
+
+static bool ContainsNewline(const std::string_view &s)
+{
+	for (auto c : s) if (c == '\r' || c == '\n') return true;
+	return false;
+}
+static bool ContainsWhitespace(const std::string_view &s)
+{
+	for (auto c : s) if (c == '\r' || c == '\n' || c == ' ' || c == '\t') return true;
+	return false;
+}
+
+
+MsgWriter::MsgWriter(MsgProtocol _protocol) :
+	protocol(_protocol)
+{
+	crlf =
+		protocol.code >= MsgProtocolCode::Http_1_0 &&
+		protocol.code <= MsgProtocolCode::Http_1_1;
+}
+
 
 void MsgWriter::_startMsg()
 {
 	if (msg) throw MsgException(MsgError::OUT_OF_ORDER, 0, 0);
-	*this = MsgWriter();
+	*this = MsgWriter(protocol);
 	msg = nng::make_msg(0);
 }
 
@@ -30,7 +58,7 @@ void MsgWriter::_autoCloseHeaders()
 
 void MsgWriter::_newline()
 {
-	msg.body().append(nng::view("\n", 1));
+	msg.body().append(crlf ? nng::view("\r\n", 2) : nng::view("\n", 1));
 }
 
 void MsgWriter::_append(char c)
@@ -53,12 +81,11 @@ void MsgWriter::startRequest(std::string_view uri, Method method)
 	_append(method.toString());
 	_append(' ');
 
-	for (auto c : uri) if (c == '\r' || c == '\n' || c == ' ')
+	if (ContainsWhitespace(uri))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
 	_append(uri);
 	_append(' ');
-
-	// PROTOCOL?
+	_append(protocol.toString());
 
 	_newline();
 }
@@ -67,13 +94,12 @@ void MsgWriter::startReply(Status status, std::string_view reason)
 {
 	_startMsg();
 
-	// PROTOCOL?
-
+	_append(protocol.toString());
 	_append(' ');
 	_append(status.toString());
 	_append(' ');
 
-	for (auto c : reason) if (c == '\r' || c == '\n')
+	if (ContainsNewline(reason))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
 	_append(reason);
 
@@ -84,18 +110,16 @@ void MsgWriter::startBulletin(std::string_view uri, Status status, std::string_v
 {
 	_startMsg();
 
-	for (auto c : uri) if (c == '\r' || c == '\n' || c == ' ')
+	if (ContainsWhitespace(uri))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
 	_append(uri);
 	_append(' ');
-
-	// PROTOCOL?
-
+	_append(protocol.toString());
 	_append(' ');
 	_append(status.toString());
 	_append(' ');
 
-	for (auto c : reason) if (c == '\r' || c == '\n')
+	if (ContainsNewline(reason))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
 	_append(reason);
 
@@ -109,7 +133,7 @@ void MsgWriter::writeHeader(std::string_view name, std::string_view value)
 
 	for (auto c : name) if (c == '\r' || c == '\n' || c == ':')
 		throw MsgException(MsgError::HEADER_MALFORMED, 0, 0);
-	for (auto c : value) if (c == '\r' || c == '\n')
+	if (ContainsNewline(value))
 		throw MsgException(MsgError::HEADER_MALFORMED, 0, 0);
 
 	_append(name);
@@ -134,6 +158,24 @@ void MsgWriter::writeData(nng::view data)
 nng::msg &&MsgWriter::release()
 {
 	_autoCloseHeaders();
+
+	if (lengthSize)
+	{
+		size_t bodySize = msg.body().size() - dataOffset;
+		auto digits = NumDigits(bodySize);
+		if (digits > lengthSize)
+			throw nng::exception(nng::error::nospc, "Content-Length header completion");
+
+		char *pos = msg.body().get().data<char>() + lengthOffset + digits;
+		do
+		{
+			*--pos = '0' + (bodySize%10);
+			bodySize /= 10;
+		}
+		while (bodySize);
+	}
+	
+
 	return std::move(msg);
 }
 
@@ -167,4 +209,20 @@ void MsgWriter::writeHeader_Allowed(Methods methods)
 	}
 
 	writeHeader("Allowed", allowed);
+}
+
+void MsgWriter::writeHeader_Length(size_t maxLength)
+{
+	if (lengthSize)
+		throw nng::exception(nng::error::nospc, "Content-Length header allocation");
+
+	size_t digits = NumDigits(maxLength);
+
+	_append("Content-Length:");
+
+	lengthOffset = msg.body().size();
+	lengthSize   = digits;
+
+	_append(std::string_view("                    ", digits));
+	_newline();
 }
