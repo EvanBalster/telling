@@ -84,7 +84,7 @@ Registration::Registration(
 	delegate(std::make_shared<Delegate>()),
 	requester(delegate)
 {
-	requester.dial(HostAddress::Base::InProc(serverID));
+	requester.dial(HostAddress::Base::InProc(std::string(serverID) + "/register"));
 
 	if (!servicePath_alias.length()) servicePath_alias = servicePath;
 

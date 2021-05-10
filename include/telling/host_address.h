@@ -190,4 +190,16 @@ namespace telling
 			return base_port+uint16_t(p);
 		}
 	};
+
+
+
+	/*
+		Telling typically uses a pro
+	*/
+	inline std::string_view         DefaultServerID()         {return "telling.v0";}
+	inline const HostAddress::Base& DefaultInProc()
+	{
+		static auto a = HostAddress::Base::InProc(DefaultServerID());
+		return a;
+	}
 }

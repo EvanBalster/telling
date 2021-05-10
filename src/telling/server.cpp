@@ -32,14 +32,13 @@ namespace telling
 }
 
 
-Server::Server(std::ostream *_log, std::string_view _id) :
+Server::Server(std::ostream *_log, std::string_view _id, bool open_inproc) :
 	ID(_id),
-	address_services(HostAddress::Base::InProc(ID)),
+	address_register(HostAddress::Base::InProc(ID + "/register")),
 	address_internal(HostAddress::Base::InProc(ID + "/internal")),
 	log(_log ? *_log : server_detail::nullOutput)
 {
-
-	//device_aio_start(outer_pub, inner_sub, aio);
+	if (open_inproc) open(HostAddress::Base::InProc(ID));
 }
 
 Server::~Server()

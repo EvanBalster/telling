@@ -10,12 +10,6 @@
 namespace telling
 {
 	/*
-		Most applications only need one Server per process.
-	*/
-	static std::string_view DefaultServerID()    {return "telling.v0";}
-
-
-	/*
 		Used to register services with a Server in the same process.
 	*/
 	class Registration

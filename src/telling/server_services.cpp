@@ -66,11 +66,11 @@ Server::Services::Services() :
 	map.burst_threshold(256);
 
 
-	// Responders may dial
-	register_reply.listen(server()->address_services);
+	// Responders may dial in and request registration
+	register_reply.listen(server()->address_register);
 
 	// Publish service events
-	publish_events.listen(server()->address_services);
+	publish_events.listen(server()->address_register);
 
 
 

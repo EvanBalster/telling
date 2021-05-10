@@ -44,7 +44,16 @@ namespace telling
 	class Server : public UsingPatternEnums
 	{
 	public:
-		Server(std::ostream *log = nullptr, std::string_view ID = DefaultServerID());
+		/*
+			Create a server.
+				log -- optional logging stream
+				ID  -- in-proc hostname, also used for registration and internals
+				open_inproc -- if true, immediately open server to inproc clients.
+		*/
+		Server(
+			std::ostream    *log         = nullptr,
+			std::string_view ID          = DefaultServerID(),
+			bool             open_inproc = true);
 		~Server();
 
 		// TODO configure, start and stop endpoints
@@ -55,19 +64,12 @@ namespace telling
 		void close(const HostAddress::Base &);
 
 
-
-
-	protected:
-		static void run_req_rep  () noexcept;
-		static void run_pub_sub  () noexcept;
-		static void run_push_pull() noexcept;
-
-
 	public:
+		// In-process ID
 		const std::string ID;
 
 		const HostAddress::Base
-			address_services, // Service dial-in
+			address_register, // Service dial-in
 			address_internal; // Server components acting like clients
 
 
