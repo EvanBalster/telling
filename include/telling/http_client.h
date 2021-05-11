@@ -31,6 +31,7 @@ namespace telling
 	public:
 		// Construct with URL of host.
 		HttpClient_Base(nng::url &&_host)    : host(std::move(_host)) {}
+		virtual ~HttpClient_Base()           {}
 
 		/*
 			Get statistics
@@ -73,7 +74,7 @@ namespace telling
 	public:
 		// Construct with URL of host.
 		HttpClient_Async(std::shared_ptr<Handler>, nng::url &&_host);
-		~HttpClient_Async();
+		~HttpClient_Async() override;
 
 
 		/*
@@ -121,7 +122,7 @@ namespace telling
 	{
 	public:
 		explicit HttpClient_Box(nng::url &&_host);
-		~HttpClient_Box()                            {}
+		~HttpClient_Box() override                    {}
 
 		/*
 			Send a request to the server.

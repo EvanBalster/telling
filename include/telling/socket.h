@@ -37,7 +37,7 @@ namespace telling
 			PATTERN _pattern,
 			VARIANT _variant = STANDARD);
 
-		~Socket();
+		virtual ~Socket();
 
 
 		/*
@@ -142,7 +142,7 @@ namespace telling
 
 
 	public:
-		~Communicator()    {_socket = nullptr;}
+		virtual ~Communicator()    {_socket = nullptr;}
 
 
 		/*
@@ -251,7 +251,7 @@ namespace telling
 			Socket(_role, _pattern, _variant),
 			op(std::move(_op)) {}
 
-		~Socket_withPipeEvents() {}
+		~Socket_withPipeEvents() override {}
 
 
 	protected:
@@ -278,7 +278,7 @@ namespace telling
 		Pattern_Base(std::shared_ptr<AsyncOp_withPipeEvents> op) :
 			Communicator(std::make_shared<Socket_withPipeEvents>(std::move(op), T_Role, T_Pattern)) {}
 
-		~Pattern_Base() {}
+		~Pattern_Base() override {}
 	};
 
 
