@@ -22,6 +22,8 @@ namespace telling
 		class Bulletin;
 		using Command = Request;
 
+		class ContainsURI;
+
 		class Exception;
 
 	public:
@@ -60,9 +62,23 @@ namespace telling
 
 
 	/*
+		Mixin class for messages that contain a URI.
+	*/
+	class MsgView::ContainsURI
+	{
+	public:
+		std::string_view uri;
+
+	public:
+		bool             uriHasPrefix(std::string_view prefix)      const    {return uri.rfind(prefix, 0) == 0;}
+		std::string_view uriSubstr   (size_t offset, size_t length) const    {return uri.substr(offset, length);}
+	};
+
+
+	/*
 		View a Request.
 	*/
-	class MsgView::Request : public MsgView
+	class MsgView::Request : public MsgView, public MsgView::ContainsURI
 	{
 	public:
 		Request() noexcept             {}
@@ -77,7 +93,6 @@ namespace telling
 	public:
 		Method           method;
 		std::string_view methodString;
-		std::string_view uri;
 		MsgProtocol      protocol;
 		std::string_view protocolString;
 	};
@@ -125,7 +140,7 @@ namespace telling
 	/*
 		View a Bulletin.
 	*/
-	class MsgView::Bulletin : public MsgView::ReplyBase
+	class MsgView::Bulletin : public MsgView::ReplyBase, public MsgView::ContainsURI
 	{
 	public:
 		Bulletin() noexcept             {}
@@ -135,9 +150,5 @@ namespace telling
 
 
 		void _parse_bulletin();
-
-
-	public:
-		std::string_view uri;
 	};
 }

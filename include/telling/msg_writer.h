@@ -29,11 +29,17 @@ namespace telling
 		/*
 			Construct a MsgWriter with STEP 1 completed.
 		*/
-		static MsgWriter Request (std::string_view uri, Method method = MethodCode::GET)           {MsgWriter w; w.startRequest(uri, method);          return w;}
-		static MsgWriter Reply   (                      Status status = StatusCode::OK)            {MsgWriter w; w.startReply(status);                 return w;}
-		static MsgWriter Reply   (                      Status status, std::string_view reason)    {MsgWriter w; w.startReply(status, reason);         return w;}
-		static MsgWriter Bulletin(std::string_view uri, Status status = StatusCode::OK)            {MsgWriter w; w.startBulletin(uri, status);         return w;}
-		static MsgWriter Bulletin(std::string_view uri, Status status, std::string_view reason)    {MsgWriter w; w.startBulletin(uri, status, reason); return w;}
+		static MsgWriter Request     (std::string_view uri, Method method = MethodCode::GET)           {MsgWriter w;      w.startRequest(uri, method);          return w;}
+		static MsgWriter Reply       (                      Status status = StatusCode::OK)            {MsgWriter w;      w.startReply(status);                 return w;}
+		static MsgWriter Bulletin    (std::string_view uri, Status status = StatusCode::OK)            {MsgWriter w;      w.startBulletin(uri, status);         return w;}
+		static MsgWriter Reply       (                      Status status, std::string_view reason)    {MsgWriter w;      w.startReply(status, reason);         return w;}
+		static MsgWriter Bulletin    (std::string_view uri, Status status, std::string_view reason)    {MsgWriter w;      w.startBulletin(uri, status, reason); return w;}
+
+		static MsgWriter HttpRequest (std::string_view uri, Method method = MethodCode::GET)           {MsgWriter w=Http; w.startRequest(uri, method);          return w;}
+		static MsgWriter HttpReply   (                      Status status = StatusCode::OK)            {MsgWriter w=Http; w.startReply(status);                 return w;}
+		static MsgWriter HttpBulletin(std::string_view uri, Status status = StatusCode::OK)            {MsgWriter w=Http; w.startBulletin(uri, status);         return w;}
+		static MsgWriter HttpReply   (                      Status status, std::string_view reason)    {MsgWriter w=Http; w.startReply(status, reason);         return w;}
+		static MsgWriter HttpBulletin(std::string_view uri, Status status, std::string_view reason)    {MsgWriter w=Http; w.startBulletin(uri, status, reason); return w;}
 
 		/*
 			STEP 2: write as many headers as desired.
