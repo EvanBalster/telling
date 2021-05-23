@@ -22,7 +22,7 @@ namespace telling
 		class Bulletin;
 		using Command = Request;
 
-		class ContainsURI;
+		class UriView;
 
 		class Exception;
 
@@ -64,21 +64,36 @@ namespace telling
 	/*
 		Mixin class for messages that contain a URI.
 	*/
-	class MsgView::ContainsURI
+	class MsgView::UriView : public std::string_view
 	{
 	public:
-		std::string_view uri;
+		UriView()                              : std::string_view() {}
+		UriView(const std::string_view &other) : std::string_view(other) {}
+		UriView(const std::string      &other) : std::string_view(other) {}
+		UriView(const char *s, size_t count)   : std::string_view(s, count) {}
+		UriView(const char *cstr)              : std::string_view(cstr) {}
 
 	public:
-		bool             uriHasPrefix(std::string_view prefix)      const    {return uri.rfind(prefix, 0) == 0;}
-		std::string_view uriSubstr   (size_t offset, size_t length) const    {return uri.substr(offset, length);}
+		/*
+			UriView is truthy if it points to a non-zero address, even if its length is zero.
+		*/
+		explicit operator bool() const    {return data() != nullptr;}
+
+		bool    hasPrefix(std::string_view prefix)                       const    {return rfind(prefix, 0) == 0;}
+		UriView substr   (size_t pos, size_t length = std::string::npos) const    {return data() ? std::string_view::substr(pos, length) : UriView();}
+
+		/*
+			If the URI matches this prefix, returns the remainder of the URI (which is truthy).
+				Otherwise, returns an empty, falsy URI.
+		*/
+		UriView subpath  (std::string_view prefix)                       const    {return hasPrefix(prefix) ? std::string_view::substr(prefix.length()) : UriView();}
 	};
 
 
 	/*
 		View a Request.
 	*/
-	class MsgView::Request : public MsgView, public MsgView::ContainsURI
+	class MsgView::Request : public MsgView
 	{
 	public:
 		Request() noexcept             {}
@@ -93,6 +108,7 @@ namespace telling
 	public:
 		Method           method;
 		std::string_view methodString;
+		UriView          uri;
 		MsgProtocol      protocol;
 		std::string_view protocolString;
 	};
@@ -140,7 +156,7 @@ namespace telling
 	/*
 		View a Bulletin.
 	*/
-	class MsgView::Bulletin : public MsgView::ReplyBase, public MsgView::ContainsURI
+	class MsgView::Bulletin : public MsgView::ReplyBase
 	{
 	public:
 		Bulletin() noexcept             {}
@@ -150,5 +166,9 @@ namespace telling
 
 
 		void _parse_bulletin();
+
+
+	public:
+		UriView uri;
 	};
 }
