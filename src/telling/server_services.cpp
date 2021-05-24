@@ -127,7 +127,7 @@ AsyncOp::SendDirective Server::Services::registerRequest(QueryID queryID, nng::m
 			Line 1: path prefix (base inproc address)
 			Line 2: additional configuration (currently ignored)
 	*/
-	auto text = msg.dataString();
+	auto text = msg.bodyString();
 	const char *pi = text.data(), *pe = pi+text.length();
 
 	auto pathPrefix = detail::ConsumeLine(pi, pe);

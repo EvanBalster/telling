@@ -42,8 +42,8 @@ void printHeaders(const MsgView &msg)
 }
 void printBody(const MsgView &msg)
 {
-	cout << "/----------------------------------------------------------------\\ " << msg.data().size() << endl;
-	cout << std::string_view((char*) msg.data().data(), msg.data().size()) << endl;
+	cout << "/----------------------------------------------------------------\\ " << msg.bodySize() << endl;
+	cout << std::string_view((char*) msg.bodyData<char>(), msg.bodySize()) << endl;
 	cout << "\\----------------------------------------------------------------/" << endl;
 }
 
@@ -257,7 +257,7 @@ int main(int argc, char **argv)
 					MsgView::Request req(msg);
 					//printStartLine(req);
 					//printHeaders(req);
-					cout << "[" << req.startLine() << "] `" << req.dataString() << "` -- republishing with note" << endl;
+					cout << "[" << req.startLine() << "] `" << req.bodyString() << "` -- republishing with note" << endl;
 
 					// Re-publish the pulled message
 					auto bulletin = MsgWriter::Bulletin(req.uri);
@@ -266,7 +266,7 @@ int main(int argc, char **argv)
 						bulletin.writeHeader(header.name, header.value);
 					}
 					bulletin.writeHeader("X-Republished-By", uri);
-					bulletin.writeData(req.data());
+					bulletin.writeData(req.body());
 					service.publish(bulletin.release());
 				}
 				catch (MsgException e)
@@ -406,7 +406,7 @@ int main(int argc, char **argv)
 					{
 						MsgView::Bulletin bull(msg);
 						//print(bull);
-						cout << "[" << bull.startLine() << "] `" << bull.dataString() << "`" << endl;
+						cout << "[" << bull.startLine() << "] `" << bull.bodyString() << "`" << endl;
 						cout << endl;
 					}
 					catch (MsgException e)
@@ -438,7 +438,7 @@ int main(int argc, char **argv)
 							{
 								MsgView::Reply reply(msg);
 								//print(reply);
-								cout << "[" << reply.startLine() << "] `" << reply.dataString() << "`" << endl;
+								cout << "[" << reply.startLine() << "] `" << reply.bodyString() << "`" << endl;
 								cout << endl;
 
 								if (reply.status().code == StatusCode::NotFound)

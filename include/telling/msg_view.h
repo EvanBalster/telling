@@ -40,8 +40,11 @@ namespace telling
 		*/
 		std::string_view  startLine()  const noexcept    {return _string(0, startLine_length);}
 		const MsgHeaders &headers()    const noexcept    {return msgHeaders;}
-		nng::view         data()       const noexcept    {return _view  (body_offset, msg.body().size() - body_offset);}
-		std::string_view  dataString() const noexcept    {return _string(body_offset, msg.body().size() - body_offset);}
+		nng::view         body()       const noexcept    {return _view  (body_offset, msg.body().size() - body_offset);}
+		std::string_view  bodyString() const noexcept    {return _string(body_offset, msg.body().size() - body_offset);}
+		size_t            bodySize()   const noexcept    {return msg.body().size();}
+		template<typename T>
+		const T*          bodyData()   const noexcept    {return msg.body().data<const T>();}
 
 
 		// Parse the essential structure of the message.
@@ -171,4 +174,10 @@ namespace telling
 	public:
 		UriView uri;
 	};
+
+
+
+	inline static MsgView::Request  ViewRequest (nng::msg_view msg)    {return MsgView::Request (msg);}
+	inline static MsgView::Reply    ViewReply   (nng::msg_view msg)    {return MsgView::Reply   (msg);}
+	inline static MsgView::Bulletin ViewBulletin(nng::msg_view msg)    {return MsgView::Bulletin(msg);}
 }
