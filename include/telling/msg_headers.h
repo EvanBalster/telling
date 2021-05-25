@@ -60,11 +60,16 @@ namespace telling
 		};
 
 	public:
-		iterator begin() const    {return iterator(string.data(), string.data()+string.length());}
-		iterator end  () const    {auto e = string.data()+string.length(); return iterator(e, e);}
+		MsgHeaders(std::string_view string) : _string(string) {}
 
-	public:
-		std::string_view string;
+		iterator begin() const noexcept    {return iterator(_string.data(), _string.data()+_string.length());}
+		iterator end  () const noexcept    {auto e = _string.data()+_string.length(); return iterator(e, e);}
+
+		size_t           length() const noexcept    {return _string.length();}
+		std::string_view string() const noexcept    {return _string;}
+
+	private:
+		std::string_view _string;
 	};
 
 

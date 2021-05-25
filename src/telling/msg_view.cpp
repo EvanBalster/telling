@@ -9,49 +9,58 @@ void MsgView::_parse_msg()
 {
 	using namespace telling::detail;
 
-	nng::view view = msg.body().get();
-	const char *begin = (char*) view.data(), *bol = begin, *pos = begin, *end = pos + view.size();
-
-	// Start line
-	auto startLine = ConsumeLine(pos, end);
-	startLine_length = startLine.length();
-	if (pos == end) throw MsgException(MsgError::HEADER_INCOMPLETE, bol, pos-bol);
-
-	// Headers
-	msgHeaders.string = std::string_view(pos, 0);
-	while (true)
+	// Parse basic structure
 	{
-		bol = pos;
-		auto line = ConsumeLine(pos, end);
-		if (line.length() == 0) break;
+		nng::view view = msg.body().get();
+		const char *begin = (char*) view.data(), *bol = begin, *pos = begin, *end = pos + view.size();
+
+		// Start line
+		auto startLine = ConsumeLine(pos, end);
+		if (startLine.length() > 0xFFFF) throw MsgException(MsgError::START_LINE_MALFORMED, bol, pos-bol);
+		_startLine_length = (uint16_t) startLine.length();
 		if (pos == end) throw MsgException(MsgError::HEADER_INCOMPLETE, bol, pos-bol);
+
+		// Headers
+		_headers.start = (uint16_t) (pos - begin);
+		auto boh = pos;
+		while (true)
+		{
+			bol = pos;
+			auto line = ConsumeLine(pos, end);
+			if (line.length() == 0) break;
+			if (pos == end) throw MsgException(MsgError::HEADER_INCOMPLETE, bol, pos-bol);
+		}
+		_headers.length = (uint16_t) (bol - boh);
+
+		// Body
+		if ((pos - begin) > 0xFFFF) throw MsgException(MsgError::HEADER_TOO_BIG, bol, pos-bol);
+		_body_offset = (uint16_t) (pos - begin);
 	}
-	msgHeaders.string = std::string_view(msgHeaders.string.data(), bol - msgHeaders.string.data());
-
-	// Body
-	body_offset = pos - begin;
-}
 
 
-void MsgView::_parse_auto()
-{
+	// ------------------------------------
+	// ------    PARSE START-LINE    ------
+	// ------------------------------------
+
+
 	static const size_t MAX_PARTS = 4;
 	std::string_view parts[MAX_PARTS];
 	size_t count = 0;
 
 	auto line = startLine();
-	const char *beg = line.data(), *i=beg, *e = i+line.length();
+	const char *beg = line.data(), *i=beg, *end = i+line.length();
 
 	// Delimit the start-line into up to 4 parts.
-	while (i < e)
+	while (i < end)
 	{
 		if (count == MAX_PARTS-1)
 		{
-			parts[count] = std::string_view(i, e-i);
+			parts[count] = std::string_view(i, end-i);
+			break;
 		}
 
 		const char *word = i;
-		while (i < e && *i != ' ') ++i;
+		while (i < end && *i != ' ') ++i;
 		parts[count] = std::string_view(word, i-word);
 		++i;
 		++count;
@@ -67,183 +76,48 @@ void MsgView::_parse_auto()
 		...URI can be anything, and REASON-PHRASE may contain spaces.
 		So our strategy is to search backwards for a matching protocol.
 	*/
-	size_t protocolPos = 3;
-	while (protocolPos--)
+	if (_type < TYPE(0))
 	{
-		protocolString = parts[protocolPos];
-		protocol       = MsgProtocol::Parse(protocolString);
-		if (protocol) break;
-	}
-
-	switch (protocolPos)
-	{
-	default:
-		// Unknown protocol
-		throw MsgException(MsgError::HEADER_MALFORMED, line.data(), line.length());
-
-	case 0: // Reply
-		if (count < 3) throw MsgException(MsgError::HEADER_MALFORMED, line.data(), line.length());
-		statusString = parts[1];
-		reason       = std::string_view(parts[2].data(), line.end()-parts[2].begin());
-		status       = Status::Parse(statusString);
-		break;
-
-	case 1: // Bulletin
-		if (count < 4) throw MsgException(MsgError::HEADER_MALFORMED, line.data(), line.length());
-		uri          = parts[0];
-		statusString = parts[2];
-		reason       = std::string_view(parts[3].data(), line.end()-parts[3].begin());
-		status       = Status::Parse(statusString);
-		break;
-
-	case 2: // Request
-		if (count != 3) throw MsgException(MsgError::HEADER_MALFORMED, line.data(), line.length());
-		methodString   = parts[0];
-		uri            = parts[1];
-		method         = Method::Parse(methodString);
-		break;
-	}
-}
-
-
-void MsgView::Request::_parse_request()
-{
-	auto line = startLine();
-
-	const char *i = line.data(), *e = i+line.length();
-
-	const char *bol = i;
-
-	auto consumeToSpace = [bol](const char *&i, const char *e)
-	{
-		const char *bow = i;
-		while (true)
+		int protocolPos = 3;
+		while (protocolPos-- > 0)
 		{
-			if (i == e) throw MsgException(MsgError::HEADER_MALFORMED, bol, e-bol);
-			if (*i == ' ') return std::string_view(bow, (i++)-bow);
-			++i;
+			if (MsgProtocol::Parse(parts[protocolPos])) break;
 		}
-	};
-	auto consumeToEOL = [bol](const char *&i, const char *e)
-	{
-		const char *bow = i;
-		while (true)
-		{
-			if (i == e || *i == '\r' || *i == '\n') return std::string_view(bow, i-bow);
-			if (*i == ' ') throw MsgException(MsgError::HEADER_MALFORMED, bol, e-bol);
-			++i;
-		}
-	};
+
+		// Unknown protocol, cam't autodetect message type
+		if (protocolPos < 0)
+			throw MsgException(MsgError::UNKNOWN_PROTOCOL, line.data(), line.length());
 		
-	methodString   = consumeToSpace(i, e);
-	uri            = consumeToSpace(i, e);
-	protocolString = consumeToEOL  (i, e);
-
-	method         =      Method::Parse(methodString);
-	protocol       = MsgProtocol::Parse(protocolString);
-}
-
-
-void MsgView::Reply::_parse_reply()
-{
-	auto line = startLine();
-
-	const char *i = line.data(), *e = i+line.length();
-
-	const char *bol = i;
-
-	auto consumeToSpace = [bol](const char *&i, const char *e)
-	{
-		const char *bow = i;
-		while (true)
-		{
-			if (i == e) throw MsgException(MsgError::START_LINE_MALFORMED, bol, e-bol);
-			if (*i == ' ') return std::string_view(bow, (i++)-bow);
-			++i;
-		}
-	};
-	auto consumeToEOL = [bol](const char *&i, const char *e)
-	{
-		const char *bow = i;
-		while (true)
-		{
-			// Spaces allowed in reason phrase
-			if (i == e || *i == '\r' || *i == '\n') return std::string_view(bow, i-bow);
-			++i;
-		}
-	};
-
-	protocolString = consumeToSpace(i, e);
-	protocol       = MsgProtocol::Parse(protocolString);
-
-	// 3-digit status code...
-	if (i + 4 > e) throw MsgException(MsgError::START_LINE_MALFORMED, bol, e-bol);
-	const char *statusStart = i;
-	for (size_t n = 0; n < 3; ++n)
-	{
-		if (*i < '0' || *i > '9')
-			throw MsgException(MsgError::START_LINE_MALFORMED, bol, e-bol);
-		++i;
+		// Values of TYPE correspond to protocol position
+		_type = TYPE(protocolPos);
 	}
-	statusString = std::string_view(statusStart, 3);
+	
 
-	// Space after status code is required
-	if (*i != ' ') throw MsgException(MsgError::START_LINE_MALFORMED, bol, e-bol);
-	++i;
+	auto toRange   = [beg]    (const std::string_view &s) {return HeadRange{(uint16_t) (s.data()-beg), (uint16_t) s.length()};};
+	auto restRange = [beg,end](const std::string_view &s) {return HeadRange{(uint16_t) (s.data()-beg), (uint16_t) (end-s.data())};};
 
-	// Reason phrase, which may be 0 characters
-	reason = consumeToEOL(i, e);
-}
-
-
-void MsgView::Bulletin::_parse_bulletin()
-{
-	auto line = startLine();
-
-	const char *i = line.data(), *e = i+line.length();
-
-	const char *bol = i;
-
-	auto consumeToSpace = [bol](const char *&i, const char *e)
+	switch (_type)
 	{
-		const char *bow = i;
-		while (true)
-		{
-			if (i == e) throw MsgException(MsgError::START_LINE_MALFORMED, bol, e-bol);
-			if (*i == ' ') return std::string_view(bow, (i++)-bow);
-			++i;
-		}
-	};
-	auto consumeToEOL = [bol](const char *&i, const char *e)
-	{
-		const char *bow = i;
-		while (true)
-		{
-			// Spaces allowed in reason phrase
-			if (i == e || *i == '\r' || *i == '\n') return std::string_view(bow, i-bow);
-			++i;
-		}
-	};
+	case TYPE::REPLY: // Reply
+		if (count < 3) throw MsgException(MsgError::START_LINE_MALFORMED, line.data(), line.length());
+		_protocol = toRange  (parts[0]);
+		_status   = toRange  (parts[1]);
+		_reason   = restRange(parts[2]);
+		break;
 
-	uri            = consumeToSpace(i, e);
-	protocolString = consumeToSpace(i, e);
-	protocol       = MsgProtocol::Parse(protocolString);
+	case TYPE::BULLETIN: // Bulletin
+		if (count < 4) throw MsgException(MsgError::START_LINE_MALFORMED, line.data(), line.length());
+		_uri      = toRange  (parts[0]);
+		_protocol = toRange  (parts[1]);
+		_status   = toRange  (parts[2]);
+		_reason   = restRange(parts[3]);
+		break;
 
-	// 3-digit status code...
-	if (i + 4 > e) throw MsgException(MsgError::START_LINE_MALFORMED, bol, e-bol);
-	const char *statusStart = i;
-	for (size_t n = 0; n < 3; ++n)
-	{
-		if (*i < '0' || *i > '9')
-			throw MsgException(MsgError::START_LINE_MALFORMED, bol, e-bol);
-		++i;
+	case TYPE::REQUEST: // Request
+		if (count != 3) throw MsgException(MsgError::START_LINE_MALFORMED, line.data(), line.length());
+		_method   = toRange  (parts[0]);
+		_uri      = toRange  (parts[1]);
+		_protocol = toRange  (parts[2]);
+		break;
 	}
-	statusString = std::string_view(statusStart, 3);
-
-	// Space after status code is required
-	if (*i != ' ') throw MsgException(MsgError::START_LINE_MALFORMED, bol, e-bol);
-	++i;
-
-	// Reason phrase, which may be 0 characters
-	reason = consumeToEOL(i, e);
 }

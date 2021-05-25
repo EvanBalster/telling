@@ -17,8 +17,10 @@ namespace telling
 			SUCCESS              = 0,
 			HEADER_INCOMPLETE    = 1,
 			HEADER_MALFORMED     = 2,
-			START_LINE_MALFORMED = 3,
-			OUT_OF_ORDER         = 4,
+			HEADER_TOO_BIG       = 3,
+			START_LINE_MALFORMED = 4,
+			OUT_OF_ORDER         = 5,
+			UNKNOWN_PROTOCOL     = 6,
 		};
 	};
 
@@ -39,7 +41,9 @@ namespace telling
 			case SUCCESS:              return "The message was parsed successfully.";
 			case HEADER_INCOMPLETE:    return "The message's header is incomplete.";
 			case HEADER_MALFORMED:     return "The message contains a malformed header.";
+			case HEADER_TOO_BIG:       return "The message header is too large (>64KiB).";
 			case START_LINE_MALFORMED: return "The message's start line is malformed.";
+			case UNKNOWN_PROTOCOL:     return "The protocol is not supported.";
 			default:                   return "An unknown error occurred while parsing the message.";
 			}
 		}

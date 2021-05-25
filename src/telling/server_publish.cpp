@@ -40,7 +40,7 @@ AsyncOp::Directive Server::Publish::received(const MsgView::Bulletin &bulletin, 
 	auto server = this->server();
 	auto &log = server->log;
 
-	log << Name() << ": publishing on URI `" << bulletin.uri << "`" << std::endl;
+	log << Name() << ": publishing on URI `" << bulletin.uri() << "`" << std::endl;
 
 	// Publish the message!
 	publish.publish(std::move(msg));

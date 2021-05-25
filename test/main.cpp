@@ -26,15 +26,15 @@ using std::cout;
 using std::endl;
 
 
-template<class T> void printStartLine(T &t) {cout << "\tStartLine: `" << t.startLine()  << "`" << endl;}
-template<class T> void printMethod   (T &t) {cout << "\tMethod:    `" << t.methodString << "` -- parsed as HTTP " << t.method << endl;}
-template<class T> void printURI      (T &t) {cout << "\tURI:       `" << t.uri          << "`" << endl;}
-template<class T> void printProtocol (T &t) {cout << "\tProtocol:  `" << t.protocol     << "`" << endl;}
-template<class T> void printStatus   (T &t) {cout << "\tStatus:    `" << t.statusString << "` -- parsed as HTTP " << t.status() << ' ' << t.status().reasonPhrase() << endl;}
-template<class T> void printReason   (T &t) {cout << "\tReason:    `" << t.reason       << "`" << endl;}
+template<class T> void printStartLine(T &t) {cout << "\tStartLine: `" << t.startLine()    << "`" << endl;}
+template<class T> void printMethod   (T &t) {cout << "\tMethod:    `" << t.methodString() << "` -- parsed as HTTP " << t.method() << endl;}
+template<class T> void printURI      (T &t) {cout << "\tURI:       `" << t.uri()          << "`" << endl;}
+template<class T> void printProtocol (T &t) {cout << "\tProtocol:  `" << t.protocol()     << "`" << endl;}
+template<class T> void printStatus   (T &t) {cout << "\tStatus:    `" << t.statusString() << "` -- parsed as HTTP " << t.status() << ' ' << t.status().reasonPhrase() << endl;}
+template<class T> void printReason   (T &t) {cout << "\tReason:    `" << t.reason()       << "`" << endl;}
 void printHeaders(const MsgView &msg)
 {
-	cout << "\tHeaders... (" << msg.msgHeaders.string.length() << " bytes)" << endl;
+	cout << "\tHeaders... (" << msg.headers().length() << " bytes)" << endl;
 	for (auto header : msg.headers())
 	{
 		cout << "		`" << header.name << "` = `" << header.value << "`" << endl;
@@ -106,7 +106,7 @@ Content-Type:		application/json
 {"attributes": {"slide_mode": "hold"}})**");
 #else
 	{
-		auto msg = MsgWriter::Request("/voices/1", MethodCode::PATCH);
+		auto msg = WriteRequest("/voices/1", MethodCode::PATCH);
 		msg.writeHeader("Content-Type", "application/json");
 		msg.writeData(R"*({"attributes": {"slide_mode": "hold"}})*");
 		mRequest = msg.release();
@@ -122,7 +122,7 @@ Content-Type:		application/json
 {"attributes": {"midi_pitch": 64.729}})**");
 #else
 	{
-		auto msg = MsgWriter::Reply();
+		auto msg = WriteReply();
 		msg.writeHeader("Content-Type", "application/json");
 		msg.writeData(R"*({"attributes": {"midi_pitch": 64.729}})*");
 		mReply = msg.release();
@@ -138,7 +138,7 @@ Content-Type:		application/json
 {"attributes": {"midi_pitch": 64.729}})**");
 #else
 	{
-		auto msg = MsgWriter::Bulletin("/voices/1");
+		auto msg = WriteBulletin("/voices/1");
 		msg.writeHeader("Content-Type", "application/json");
 		msg.writeData(R"*({"attributes": {"midi_pitch": 64.729}})*");
 		mBulletin = msg.release();
@@ -260,7 +260,7 @@ int main(int argc, char **argv)
 					cout << "[" << req.startLine() << "] `" << req.bodyString() << "` -- republishing with note" << endl;
 
 					// Re-publish the pulled message
-					auto bulletin = MsgWriter::Bulletin(req.uri);
+					auto bulletin = WriteBulletin(req.uri());
 					for (auto header : req.headers())
 					{
 						bulletin.writeHeader(header.name, header.value);
@@ -290,7 +290,7 @@ int main(int argc, char **argv)
 					//printHeaders(req);
 					//cout << "[" << req.startLine() << "] `" << req.dataString() << "`" << endl;
 
-					auto reply = MsgWriter::Reply();
+					auto reply = WriteReply();
 					reply.writeHeader("Content-Type", "text/plain");
 					reply.writeData(reply_text);
 					service.respond(reply.release());
@@ -328,7 +328,7 @@ int main(int argc, char **argv)
 					cout << endl;
 					cout << "PUB send from service (hearbeat)" << endl;
 
-					auto bulletin = MsgWriter::Bulletin(uri);
+					auto bulletin = WriteBulletin(uri);
 					bulletin.writeHeader("Content-Type", "text/plain");
 					bulletin.writeData("This is a heartbeat message!");
 					service.publish(bulletin.release());
@@ -478,7 +478,7 @@ int main(int argc, char **argv)
 			cout << endl;
 
 			// Compose a request...
-			auto msg = MsgWriter::Request(service_uri);
+			auto msg = WriteRequest(service_uri);
 			msg.writeHeader("Content-Type", "text/plain");
 
 			// And fire it as push or request.

@@ -115,10 +115,10 @@ AsyncOp::SendDirective Server::Services::registerRequest(QueryID queryID, nng::m
 		Accept only services message with status 200
 	*/
 
-	if (msg.uri != "*services")
+	if (msg.uri() != "*services")
 	{
 		// Don't understand this message
-		log << Name() << ": did not recognize URI `" << msg.uri << "`" << endl;
+		log << Name() << ": did not recognize URI `" << msg.uri() << "`" << endl;
 		return AsyncOp::DECLINE;
 	}
 
@@ -145,7 +145,7 @@ AsyncOp::SendDirective Server::Services::registerRequest(QueryID queryID, nng::m
 				<< std::string_view(pi, pe-pi) << "`" << endl;
 		}
 
-		auto writer = MsgWriter::Reply(HttpStatus::Code::BadRequest);
+		auto writer = WriteReply(HttpStatus::Code::BadRequest);
 		writer.writeData("Malformed Registration Request Body.");
 		return writer.release();
 	}
@@ -227,7 +227,7 @@ void Server::Services::run_management_thread()
 			server->publish.subscribe.disconnect(route->path);
 
 			// Publish existence of new service?
-			auto bulletin = MsgWriter::Bulletin("*services", StatusCode::Gone);
+			auto bulletin = WriteBulletin("*services", StatusCode::Gone);
 			bulletin.writeData(route->path);
 			publish_events.publish(bulletin.release());
 
@@ -251,7 +251,7 @@ void Server::Services::run_management_thread()
 				registrationMap.erase(spec.pipeID);
 
 				// Failed dialing... service unavailable
-				auto notify = MsgWriter::Reply(StatusCode::Conflict);
+				auto notify = WriteReply(StatusCode::Conflict);
 				notify.writeHeader("Content-Type", "text/plain");
 				notify.writeData(std::string(spec.map_uri));
 				notify.writeData("\nThis URI is already registered.");
@@ -289,7 +289,7 @@ void Server::Services::run_management_thread()
 				registrationMap.erase(spec.pipeID);
 
 				// Failed dialing... service unavailable
-				auto notify = MsgWriter::Reply(StatusCode::ServiceUnavailable);
+				auto notify = WriteReply(StatusCode::ServiceUnavailable);
 				notify.writeHeader("Content-Type", "text/plain");
 				notify.writeData(std::string(spec.host.base));
 				notify.writeData("\nCould not dial specified service URI.");
@@ -299,14 +299,14 @@ void Server::Services::run_management_thread()
 			}
 
 			// Notify service of successful enrollment.
-			auto notify = MsgWriter::Reply();
+			auto notify = WriteReply();
 			notify.writeHeader("Content-Type", "text/plain");
 			notify.writeData(spec.map_uri);
 			notify.writeData("\nEnrolled with this URI.");
 			register_reply.respondTo(spec.queryID, notify.release());
 
 			// Publish existence of new service?
-			auto bulletin = MsgWriter::Bulletin("*services", StatusCode::Created);
+			auto bulletin = WriteBulletin("*services", StatusCode::Created);
 			bulletin.writeData(spec.map_uri);
 			publish_events.publish(bulletin.release());
 		}

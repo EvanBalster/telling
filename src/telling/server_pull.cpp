@@ -28,7 +28,7 @@ AsyncOp::Directive Server::Pull::received(const MsgView::Request &request, nng::
 {
 	auto server = this->server();
 
-	auto status = server->services.routePush(request.uri, std::move(msg));
+	auto status = server->services.routePush(request.uri(), std::move(msg));
 
 	//server->log << Name() << ": pushing to URI `" << request.uri << "`" << std::endl;
 
@@ -40,7 +40,7 @@ AsyncOp::Directive Server::Pull::received(const MsgView::Request &request, nng::
 	{
 		// Log the error.
 		server->log << Name() << ": error " << status << " (" << status.reasonPhrase()
-			<< ") routing to `" << request.uri << "`" << std::endl;
+			<< ") routing to `" << request.uri() << "`" << std::endl;
 
 		// There's no opportunity to reply, so the failed message is discarded.
 		return AsyncOp::DECLINE;

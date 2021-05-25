@@ -94,7 +94,7 @@ AsyncOp::Directive Server::Reply::received(const MsgView::Request &request, nng:
 {
 	auto server = this->server();
 
-	auto status = server->services.routeRequest(request.uri, std::move(msg));
+	auto status = server->services.routeRequest(request.uri(), std::move(msg));
 
 	//server->log << Name() << ": routing to `" << request.uri << "`" << std::endl;
 
@@ -106,7 +106,7 @@ AsyncOp::Directive Server::Reply::received(const MsgView::Request &request, nng:
 	{
 		// Log the error.
 		server->log << Name() << ": error " << status << " (" << status.reasonPhrase()
-			<< ") routing to `" << request.uri << "`" << std::endl;
+			<< ") routing to `" << request.uri() << "`" << std::endl;
 
 		// Reply to client with error message.
 		MsgWriter writer;
@@ -122,7 +122,7 @@ AsyncOp::Directive Server::Reply::received(const MsgView::Request &request, nng:
 		{
 		case StatusCode::NotFound:
 			writer.writeData("No service for URI `");
-			writer.writeData(request.uri);
+			writer.writeData(request.uri());
 			writer.writeData("`");
 			break;
 		case StatusCode::ServiceUnavailable:

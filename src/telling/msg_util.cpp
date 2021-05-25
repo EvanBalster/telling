@@ -8,7 +8,7 @@ using namespace telling;
 
 nng::msg MsgException::writeReply(std::string_view error_context) const
 {
-	auto msg = MsgWriter::Reply(StatusCode::BadRequest);
+	auto msg = WriteReply(StatusCode::BadRequest);
 	msg.writeHeader("Content-Type", "text/plain");
 
 	msg.writeData("Message Exception in `");

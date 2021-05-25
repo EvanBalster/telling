@@ -45,7 +45,7 @@ namespace telling_test
 				{
 					++service->request_count;
 
-					auto msg = MsgWriter::Reply();
+					auto msg = WriteReply();
 					msg.writeHeader("Content-Type", "text/plain");
 					msg.writeData(service->uri);
 					msg.writeData("\r\n");
@@ -110,7 +110,7 @@ namespace telling_test
 				if (!service) return TERMINATE;
 
 				// Republish the pushed message
-				auto pub = MsgWriter::Bulletin(service->uri);
+				auto pub = WriteBulletin(service->uri);
 				for (auto h : req.headers()) pub.writeHeader(h.name, h.value);
 				pub.writeData(req.data());
 				service->publish(pub.release());
@@ -119,7 +119,7 @@ namespace telling_test
 				{
 					++service->request_count;
 
-					auto msg = MsgWriter::Reply(StatusCode::OK);
+					auto msg = WriteReply(StatusCode::OK);
 					return msg.release();
 				}
 				else

@@ -88,22 +88,24 @@ AsyncOp::SendDirective Reactor::_handle(QueryID qid, nng::msg &&msg)
 
 	MsgView::Request request;
 
+	Method method = MethodCode::None;
+
 	try
 	{
 		// Parse.
 		request = MsgView::Request(msg);
+		method = request.method();
 	}
 	catch (MsgException e)
 	{
 		result = e.writeReply("Service Event Handler");
-		request.method = MethodCode::None;
 	}
 
 	if (!result.sendMsg)
 	{
 		std::lock_guard g(reactor_mtx);
 
-		switch (request.method.code)
+		switch (method.code)
 		{
 		default:
 		case MethodCode::CONNECT: result = DECLINE; break;
@@ -169,7 +171,7 @@ AsyncOp::SendDirective Reactor::request_recv(QueryID id, nng::msg &&msg)
 
 AsyncOp::SendDirective Reactor::recv_options(QueryID id, const MsgView::Request &req, nng::msg &&msg)
 {
-	auto reply = MsgWriter::Reply();
+	auto reply = WriteReply();
 	reply.writeHeader_Allowed(this->allowed());
 	return reply.release();
 }
