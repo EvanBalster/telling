@@ -33,6 +33,79 @@ void MsgView::_parse_msg()
 }
 
 
+void MsgView::_parse_auto()
+{
+	static const size_t MAX_PARTS = 4;
+	std::string_view parts[MAX_PARTS];
+	size_t count = 0;
+
+	auto line = startLine();
+	const char *beg = line.data(), *i=beg, *e = i+line.length();
+
+	// Delimit the start-line into up to 4 parts.
+	while (i < e)
+	{
+		if (count == MAX_PARTS-1)
+		{
+			parts[count] = std::string_view(i, e-i);
+		}
+
+		const char *word = i;
+		while (i < e && *i != ' ') ++i;
+		parts[count] = std::string_view(word, i-word);
+		++i;
+		++count;
+	}
+
+	/*
+		Case     | word 1   | word 2   | word 3   | word 4
+		---------|----------|----------|-------------------------
+		REPLY    | PROTOCOL | STATUS   | REASON-PHRASE
+		BULLETIN | URI      | PROTOCOL | STATUS   | REASON-PHRASE
+		REQUEST  | METHOD   | URI      | PROTOCOL |
+
+		...URI can be anything, and REASON-PHRASE may contain spaces.
+		So our strategy is to search backwards for a matching protocol.
+	*/
+	size_t protocolPos = 3;
+	while (protocolPos--)
+	{
+		protocolString = parts[protocolPos];
+		protocol       = MsgProtocol::Parse(protocolString);
+		if (protocol) break;
+	}
+
+	switch (protocolPos)
+	{
+	default:
+		// Unknown protocol
+		throw MsgException(MsgError::HEADER_MALFORMED, line.data(), line.length());
+
+	case 0: // Reply
+		if (count < 3) throw MsgException(MsgError::HEADER_MALFORMED, line.data(), line.length());
+		statusString = parts[1];
+		reason       = std::string_view(parts[2].data(), line.end()-parts[2].begin());
+		status       = Status::Parse(statusString);
+		break;
+
+	case 1: // Bulletin
+		if (count < 4) throw MsgException(MsgError::HEADER_MALFORMED, line.data(), line.length());
+		uri          = parts[0];
+		statusString = parts[2];
+		reason       = std::string_view(parts[3].data(), line.end()-parts[3].begin());
+		status       = Status::Parse(statusString);
+		break;
+
+	case 2: // Request
+		if (count != 3) throw MsgException(MsgError::HEADER_MALFORMED, line.data(), line.length());
+		methodString   = parts[0];
+		uri            = parts[1];
+		method         = Method::Parse(methodString);
+		break;
+	}
+}
+
+
 void MsgView::Request::_parse_request()
 {
 	auto line = startLine();

@@ -9,6 +9,33 @@
 
 namespace telling
 {
+	// URI variant of string_view
+	class UriView : public std::string_view
+	{
+	public:
+		UriView()                              : std::string_view() {}
+		UriView(const std::string_view &other) : std::string_view(other) {}
+		UriView(const std::string      &other) : std::string_view(other) {}
+		UriView(const char *s, size_t count)   : std::string_view(s, count) {}
+		UriView(const char *cstr)              : std::string_view(cstr) {}
+
+	public:
+		/*
+			UriView is truthy if it points to a non-zero address, even if its length is zero.
+		*/
+		explicit operator bool() const    {return data() != nullptr;}
+
+		bool    hasPrefix(std::string_view prefix)                       const    {return rfind(prefix, 0) == 0;}
+		UriView substr   (size_t pos, size_t length = std::string::npos) const    {return data() ? std::string_view::substr(pos, length) : UriView();}
+
+		/*
+			If the URI matches this prefix, returns the remainder of the URI (which is truthy).
+				Otherwise, returns an empty, falsy URI.
+		*/
+		UriView subpath  (std::string_view prefix)                       const    {return hasPrefix(prefix) ? std::string_view::substr(prefix.length()) : UriView();}
+	};
+
+
 	/*
 		Parse a Telling message into its component parts.
 	*/
@@ -20,9 +47,8 @@ namespace telling
 		class ReplyBase;
 		class Reply;
 		class Bulletin;
+		class Auto;
 		using Command = Request;
-
-		class UriView;
 
 		class Exception;
 
@@ -50,6 +76,15 @@ namespace telling
 		// Parse the essential structure of the message.
 		void _parse_msg();
 
+		// Parse the start-line automatically.
+		void _parse_auto();
+
+
+		// Duck-typing tests for message formats
+		bool is_reply   () const noexcept    {return msg && msg.body().data<char>() == statusString.data();}
+		bool is_request () const noexcept    {return msg && msg.body().data<char>() == methodString.data();}
+		bool is_bulletin() const noexcept    {return msg && msg.body().data<char>() == uri         .data();}
+
 
 	public:
 		nng::msg_view    msg;
@@ -57,39 +92,33 @@ namespace telling
 		MsgHeaders       msgHeaders;
 		size_t           body_offset;
 
+		// Start-line properties...
+		Method           method;
+		std::string_view methodString;
+		UriView          uri;
+		MsgProtocol      protocol;
+		std::string_view protocolString;
+		Status           status;
+		std::string_view statusString;
+		std::string_view reason;
+
 
 	private:
 		nng::view        _view  (size_t start, size_t length) const noexcept    {return nng::       view(static_cast<char*>(msg.body().data())+start, length);}
 		std::string_view _string(size_t start, size_t length) const noexcept    {return std::string_view(static_cast<char*>(msg.body().data())+start, length);}
 	};
-
-
+	
+	
 	/*
-		Mixin class for messages that contain a URI.
+		All-purpose message view which can auto-detect message type.
 	*/
-	class MsgView::UriView : public std::string_view
+	class MsgView::Auto : public MsgView
 	{
 	public:
-		UriView()                              : std::string_view() {}
-		UriView(const std::string_view &other) : std::string_view(other) {}
-		UriView(const std::string      &other) : std::string_view(other) {}
-		UriView(const char *s, size_t count)   : std::string_view(s, count) {}
-		UriView(const char *cstr)              : std::string_view(cstr) {}
+		Auto() noexcept             {}
+		Auto(nng::msg_view _msg)    : MsgView(_msg) {if (msg) _parse_auto();}
 
-	public:
-		/*
-			UriView is truthy if it points to a non-zero address, even if its length is zero.
-		*/
-		explicit operator bool() const    {return data() != nullptr;}
-
-		bool    hasPrefix(std::string_view prefix)                       const    {return rfind(prefix, 0) == 0;}
-		UriView substr   (size_t pos, size_t length = std::string::npos) const    {return data() ? std::string_view::substr(pos, length) : UriView();}
-
-		/*
-			If the URI matches this prefix, returns the remainder of the URI (which is truthy).
-				Otherwise, returns an empty, falsy URI.
-		*/
-		UriView subpath  (std::string_view prefix)                       const    {return hasPrefix(prefix) ? std::string_view::substr(prefix.length()) : UriView();}
+		~Auto() noexcept {}
 	};
 
 
@@ -106,44 +135,13 @@ namespace telling
 
 
 		void _parse_request();
-
-
-	public:
-		Method           method;
-		std::string_view methodString;
-		UriView          uri;
-		MsgProtocol      protocol;
-		std::string_view protocolString;
-	};
-
-
-	/*
-		Base class for Reply and Bulletin.
-	*/
-	class MsgView::ReplyBase : public MsgView
-	{
-	public:
-		ReplyBase() noexcept             {}
-		ReplyBase(nng::msg_view _msg)    : MsgView(_msg) {}
-
-		~ReplyBase() noexcept {}
-
-
-		Status status() const noexcept    {return Status::Parse(statusString);}
-
-
-	public:
-		MsgProtocol      protocol;
-		std::string_view protocolString;
-		std::string_view statusString;
-		std::string_view reason;
 	};
 
 
 	/*
 		View a Reply.
 	*/
-	class MsgView::Reply : public MsgView::ReplyBase
+	class MsgView::Reply : public MsgView
 	{
 	public:
 		Reply() noexcept             {}
@@ -159,7 +157,7 @@ namespace telling
 	/*
 		View a Bulletin.
 	*/
-	class MsgView::Bulletin : public MsgView::ReplyBase
+	class MsgView::Bulletin : public MsgView
 	{
 	public:
 		Bulletin() noexcept             {}
@@ -169,10 +167,6 @@ namespace telling
 
 
 		void _parse_bulletin();
-
-
-	public:
-		UriView uri;
 	};
 
 

@@ -55,9 +55,9 @@ namespace telling
 			case MsgProtocolCode::Http_1_0: return "HTTP/1.0";
 			case MsgProtocolCode::Http_1_1: return "HTTP/1.1";
 
-			case MsgProtocolCode::None:    return "NoProtocol";
+			case MsgProtocolCode::None:     return "NoProtocol";
 			default:
-			case MsgProtocolCode::Unknown: return "UnknownProtocol";
+			case MsgProtocolCode::Unknown:  return "UnknownProtocol";
 		}
 	}
 
@@ -65,11 +65,16 @@ namespace telling
 	{
 		using namespace detail;
 
-		if (v.length() == 0) return MsgProtocolCode::None;
-
-		if (v == "HTTP/1.0") return MsgProtocolCode::Http_1_0;
-		if (v == "HTTP/1.1") return MsgProtocolCode::Http_1_1;
-		if (v == "Tell/0") return MsgProtocolCode::Telling;
+		if (v.length() == 0)     return MsgProtocolCode::None;
+		if      (v[0] == 'T')
+		{
+			if (v == "Tell/0")   return MsgProtocolCode::Telling;
+		}
+		else if (v[0] == 'H')
+		{
+			if (v == "HTTP/1.0") return MsgProtocolCode::Http_1_0;
+			if (v == "HTTP/1.1") return MsgProtocolCode::Http_1_1;
+		}
 
 		return MsgProtocolCode::Unknown;
 	}
