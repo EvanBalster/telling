@@ -119,20 +119,20 @@ namespace telling
 			// Receive a subscribe message.
 			// There is no method for replying.
 			virtual Directive     subscribe_recv (nng::msg &&bulletin) = 0;
-			virtual Directive     subscribe_error(nng::error)         {}
+			virtual Directive     subscribe_error(nng::error)         {return AUTO;}
 
 			// Receive a reply to some earlier request.
 			virtual Directive     reply_recv   (QueryID id, nng::msg &&reply) = 0;
 
 			// Request processing status (optional).
 			// request_error may be also be triggered if there is some error sending a request.
-			virtual Directive     request_made (QueryID id, const nng::msg &request)    {return AsyncOp::CONTINUE;}
-			virtual Directive     request_sent (QueryID id)                             {return AsyncOp::CONTINUE;}
-			virtual Directive     request_error(QueryID id, nng::error)                 {return AsyncOp::TERMINATE;}
+			virtual Directive     request_made (QueryID id, const nng::msg &request)    {return CONTINUE;}
+			virtual Directive     request_sent (QueryID id)                             {return CONTINUE;}
+			virtual Directive     request_error(QueryID id, nng::error)                 {return AUTO;}
 
 			// Push outbox status (optional)
-			virtual SendDirective push_sent ()              {}
-			virtual SendDirective push_error(nng::error)    {return AsyncOp::TERMINATE;}
+			virtual SendDirective push_sent ()              {return CONTINUE;}
+			virtual SendDirective push_error(nng::error)    {return AUTO;}
 
 			// Optionally receive pipe events from the various sockets.
 			virtual void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) {}

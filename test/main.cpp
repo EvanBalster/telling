@@ -326,7 +326,7 @@ int main(int argc, char **argv)
 					timer = 0;
 
 					cout << endl;
-					cout << "PUB send from service (hearbeat)" << endl;
+					cout << "PUB send from service (heartbeat)" << endl;
 
 					auto bulletin = WriteBulletin(uri);
 					bulletin.writeHeader("Content-Type", "text/plain");

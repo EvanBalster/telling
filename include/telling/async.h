@@ -87,7 +87,7 @@ namespace telling
 		*/
 		virtual void      asyncRecv_start()                      {}
 		virtual Directive asyncRecv_msg  (nng::msg &&msg)        = 0;
-		virtual Directive asyncRecv_error(nng::error status)     {return TERMINATE;}
+		virtual Directive asyncRecv_error(nng::error status)     {return AUTO;}
 		virtual void      asyncRecv_stop (nng::error status)     {}
 
 
@@ -137,7 +137,7 @@ namespace telling
 		*/
 		virtual SendDirective asyncSend_msg  (nng::msg &&msg)       = 0;
 		virtual SendDirective asyncSend_sent ()                     = 0;
-		virtual SendDirective asyncSend_error(nng::error status)    {return TERMINATE;}
+		virtual SendDirective asyncSend_error(nng::error status)    {return AUTO;}
 		virtual void          asyncSend_stop (nng::error status)    {}
 
 

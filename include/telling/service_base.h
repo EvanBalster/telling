@@ -87,7 +87,7 @@ namespace telling
 		// Receive a pull message.
 		// There is no method for replying.
 		virtual Directive     pull_recv (nng::msg &&request) = 0;
-		virtual Directive     pull_error(nng::error)         {}
+		virtual Directive     pull_error(nng::error)       {return AUTO;}
 
 		// Receive a request.
 		// May respond immediately (return a msg) or later (via respondTo).
@@ -96,11 +96,11 @@ namespace telling
 		// Reply processing status (optional).
 		// reply_error may be also be triggered if there is some error receiving a request.
 		virtual void          reply_sent (QueryID id)                {}
-		virtual Directive     reply_error(QueryID id, nng::error)    {return AsyncOp::TERMINATE;}
+		virtual Directive     reply_error(QueryID id, nng::error)    {return AUTO;}
 
 		// Publish outbox status (optional)
-		virtual SendDirective publish_sent ()              {}
-		virtual SendDirective publish_error(nng::error)    {return AsyncOp::TERMINATE;}
+		virtual SendDirective publish_sent ()              {return CONTINUE;}
+		virtual SendDirective publish_error(nng::error)    {return AUTO;}
 
 		// Optionally receive pipe events from the various sockets.
 		virtual void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) {}
