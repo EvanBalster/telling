@@ -1,0 +1,3 @@
+GET /activate.php HTTP/1.1
+Host:imitone.com
+

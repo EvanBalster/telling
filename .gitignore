@@ -31,3 +31,8 @@
 *.out
 *.app
 /.removed
+/visualstudio/.vs
+/visualstudio/x64
+/visualstudio/test/x64
+/visualstudio/telling/x64
+/visualstudio/telling_jsonapi/x64
