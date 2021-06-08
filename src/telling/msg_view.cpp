@@ -55,7 +55,7 @@ void MsgView::_parse_msg()
 	{
 		if (count == MAX_PARTS-1)
 		{
-			parts[count] = std::string_view(i, end-i);
+			parts[count++] = std::string_view(i, end-i);
 			break;
 		}
 

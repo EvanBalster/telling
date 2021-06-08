@@ -34,9 +34,14 @@ namespace telling
 			/*
 				Construct with an AsyncSend delegate.
 			*/
-			Pub_Async(std::shared_ptr<AsyncSend> p)                                  : Pub_Base(p),           Operator(socketView(), p) {}
-			Pub_Async(std::shared_ptr<AsyncSend> p, const Pub_Base &shareSocket)     : Pub_Base(shareSocket), Operator(socketView(), p) {}
+			Pub_Async(std::weak_ptr<AsyncSend> p = {})                                  : Pub_Base(),            Operator(socketView()) {initialize(p);}
+			Pub_Async(const Pub_Base &shareSocket, std::weak_ptr<AsyncSend> p = {})     : Pub_Base(shareSocket), Operator(socketView()) {initialize(p);}
 			~Pub_Async() {}
+
+			/*
+				Initialize with the provided delegate
+			*/
+			void initialize(std::weak_ptr<AsyncSend> p)    {Operator::send_init(p);}
 
 			/*
 				Attempt to push a message.  Throws nng::exception on failure.
@@ -55,9 +60,14 @@ namespace telling
 		class Pub_Box : public Pub_Async
 		{
 		public:
-			explicit Pub_Box()                      : Pub_Async(std::make_shared<AsyncSendQueue>())              {}
-			Pub_Box(const Pub_Base &shareSocket)    : Pub_Async(std::make_shared<AsyncSendQueue>(), shareSocket) {}
+			explicit Pub_Box()                      : Pub_Async()            {_init();}
+			Pub_Box(const Pub_Base &shareSocket)    : Pub_Async(shareSocket) {_init();}
 			~Pub_Box() {}
+
+
+		protected:
+			void _init()    {initialize(_queue = std::make_shared<AsyncSendQueue>());}
+			std::shared_ptr<AsyncSendQueue> _queue;
 		};
 
 		/*

@@ -341,8 +341,8 @@ namespace telling
 
 			class RegisterResponder;
 			friend class RegisterResponder;
-			std::shared_ptr<AsyncRespond> register_responder;
-			service::Reply_Async          register_reply;
+			std::shared_ptr<RegisterResponder> register_responder;
+			service::Reply_Async               register_reply;
 
 			std::unordered_map<PipeID, std::string> registrationMap;
 

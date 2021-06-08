@@ -74,6 +74,16 @@ nng::listener_view Socket::ListenerOrDialer::listener() const noexcept
 
 
 Socket::Socket(
+	std::weak_ptr<PipeEventHandler> pipe_handler,
+	ROLE    _role,
+	PATTERN _pattern,
+	VARIANT _variant) :
+	Socket(_role, _pattern, _variant)
+{
+	_pipe_handler = pipe_handler;
+}
+
+Socket::Socket(
 	ROLE    _role,
 	PATTERN _pattern,
 	VARIANT _variant) :
@@ -124,6 +134,15 @@ Socket::Socket(
 	LogSocketEvent(*this, "OPEN", "");
 }
 
+void Socket::setPipeHandler(std::weak_ptr<PipeEventHandler> new_handler)
+{
+	std::lock_guard<std::mutex> g(_mtx);
+
+	auto current = _pipe_handler.lock();
+	if (current) throw nng::exception(nng::error::busy, "telling::Socket::setPipeHandler");
+	else         _pipe_handler = new_handler;
+}
+
 Socket::~Socket()
 {
 	close();
@@ -137,6 +156,7 @@ void Socket::close() noexcept
 	{
 		LogSocketEvent(*this, "CLOSE", "");
 		_connectors.clear();
+		
 		_socket = nng::socket();
 	}
 }
@@ -170,7 +190,9 @@ void Socket::_pipeCallback(nng_pipe _pipe, nng_pipe_ev _event, void *_self)
 	//if (self->_pipe_count) LogSocketEvent(*self, "# PIPES", "", self->_pipe_count);
 	//else                   LogSocketEvent(*self, "# PIPES", "ZERO", 0);
 
-	self->pipeEvent(pipe, event);
+	// Pipe event handler
+	auto pipeHandler = self->_pipe_handler.lock();
+	if (pipeHandler) pipeHandler->pipeEvent(self, pipe, event);
 }
 
 

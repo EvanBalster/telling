@@ -29,9 +29,16 @@ namespace telling
 			public Rep_Base
 		{
 		public:
-			Rep_Async(std::shared_ptr<AsyncRespond> p)                                 : Rep_Base(p),           _delegate(p)    {_init();}
-			Rep_Async(std::shared_ptr<AsyncRespond> p, const Rep_Base &shareSocket)    : Rep_Base(shareSocket), _delegate(p)    {_init();}
+			Rep_Async(std::weak_ptr<AsyncRespond> p = {})                                 : Rep_Base()               {initialize(p);}
+			Rep_Async(const Rep_Base &shareSocket, std::weak_ptr<AsyncRespond> p = {})    : Rep_Base(shareSocket)    {initialize(p);}
 			~Rep_Async();
+
+
+			/*
+				Provide a delegate for handling requests after construction.
+					Throws nng::exception if a delegate has already been installed.
+			*/
+			void initialize(std::weak_ptr<AsyncRespond>);
 
 
 			/*
@@ -41,7 +48,7 @@ namespace telling
 
 
 		protected:
-			std::shared_ptr<AsyncRespond> _delegate;
+			std::weak_ptr<AsyncRespond> _delegate;
 
 			struct OutboxItem
 			{
@@ -93,6 +100,8 @@ namespace telling
 
 		protected:
 			class Delegate;
+			void _init();
+			std::shared_ptr<Delegate> _replyBox;
 
 			QueryID current_query = 0;
 		};

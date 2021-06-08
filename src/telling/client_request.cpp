@@ -73,10 +73,22 @@ Req_Async::~Req_Async()
 	}
 }
 
+void Req_Async::initialize(std::weak_ptr<AsyncQuery> delegate)
+{
+	if (_delegate.lock())
+		throw nng::exception(nng::error::busy, "Request_Async::initialize (already initialized)");
+
+	if (delegate.lock())
+		_delegate = delegate;
+}
+
 QueryID Req_Async::request(nng::msg &&msg)
 {
+	auto delegate = _delegate.lock();
 	if (!isReady())
-		throw nng::exception(nng::error::closed, "Push Communicator is not ready.");
+		throw nng::exception(nng::error::closed, "Request Communicator is not ready.");
+	if (!delegate)
+		throw nng::exception(nng::error::exist, "Request communicator has no delegate to handle messages");
 
 	Action *action = nullptr;
 
@@ -96,7 +108,7 @@ QueryID Req_Async::request(nng::msg &&msg)
 			idle.pop_front();
 		}
 
-		auto directive = _delegate->asyncQuery_made(action->queryID(), msg);
+		auto directive = delegate->asyncQuery_made(action->queryID(), msg);
 
 		switch (directive)
 		{
@@ -128,40 +140,45 @@ void Req_Async::Action::_callback(void *_action)
 {
 	auto action = static_cast<Req_Async::Action*>(_action);
 	auto comm = action->request;
-	auto &delegate = comm->_delegate;
+	auto delegate = comm->_delegate.lock();
 
 	AsyncOp::DIRECTIVE directive;
 	bool cleanup = false;
 
-	// Errors?
+	// Errors / callbacks
 	auto error = action->aio.result();
-	switch (error)
+	if (!delegate)
 	{
-	case nng::error::success:  break;
+		// Terminate communications if delegate is gone
+		if (action->state == RECV && error == nng::error::success)
+			action->aio.release_msg();
+		directive = AsyncOp::TERMINATE;
+	}
+	else switch (error)
+	{
+	case nng::error::success:
+		switch (action->state)
+		{
+		case SEND:
+			// Send
+			directive = delegate->asyncQuery_sent(action->queryID());
+			break;
+		case RECV:
+			// Receive the response
+			directive = delegate->asyncQuery_done(action->queryID(), action->aio.release_msg());
+			cleanup = true;
+		default:
+		case IDLE:
+			// Shouldn't happen???
+			cleanup = true;
+			break;
+		}
+		break;
 	case nng::error::canceled:
 	case nng::error::timedout:
 	default:
 		// Causes the query to be canceled.
 		directive = delegate->asyncQuery_error(action->queryID(), error);
-		cleanup = true;
-		break;
-	}
-
-	// Deliver callbacks
-	if (error == nng::error::success)
-		switch (action->state)
-	{
-	case SEND:
-		// Send
-		directive = delegate->asyncQuery_sent(action->queryID());
-		break;
-	case RECV:
-		// Receive the response
-		directive = delegate->asyncQuery_done(action->queryID(), action->aio.release_msg());
-		cleanup = true;
-	default:
-	case IDLE:
-		// Shouldn't happen???
 		cleanup = true;
 		break;
 	}
@@ -293,12 +310,18 @@ public:
 };
 
 
-Req_Box::Req_Box()                     : Req_Async(std::make_shared<Delegate>()) {}
-Req_Box::Req_Box(const Req_Base &o)    : Req_Async(std::make_shared<Delegate>(), o) {}
+Req_Box::Req_Box()                     : Req_Async() {_init();}
+Req_Box::Req_Box(const Req_Base &o)    : Req_Async(o) {_init();}
 Req_Box::~Req_Box()                    {}
+
+void Req_Box::_init()
+{
+	_requestBox = std::make_shared<Delegate>();
+	initialize(_requestBox);
+}
 
 std::future<nng::msg> Req_Box::request(nng::msg &&msg)
 {
 	auto qid = this->Request_Async::request(std::move(msg));
-	return static_cast<Delegate*>(&*_delegate)->getFuture(qid);
+	return _requestBox->getFuture(qid);
 }

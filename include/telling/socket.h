@@ -7,7 +7,7 @@
 
 #include <nngpp/nngpp.h>
 
-#include "async.h"
+#include "pattern.h"
 #include "host_address.h"
 
 
@@ -31,13 +31,34 @@ namespace telling
 		};
 
 
+		class PipeEventHandler
+		{
+		public:
+			virtual ~PipeEventHandler() {}
+
+			virtual void pipeEvent(Socket *socket, nng::pipe_view pipe, nng::pipe_ev event) {}
+		};
+
+
 	public:
 		Socket(
 			ROLE    _role,
 			PATTERN _pattern,
 			VARIANT _variant = STANDARD);
+		Socket(
+			std::weak_ptr<PipeEventHandler> _handler,
+			ROLE    _role,
+			PATTERN _pattern,
+			VARIANT _variant = STANDARD);
 
-		virtual ~Socket();
+		~Socket();
+
+
+		/*
+			Set the pipe handler if one was not previously supplied.
+				Throws nng::exception if a handler is already installed.
+		*/
+		void setPipeHandler(std::weak_ptr<PipeEventHandler> handler);
 
 
 		/*
@@ -95,9 +116,7 @@ namespace telling
 		std::mutex    _mtx;
 		nng::socket   _socket;
 		uint32_t      _pipe_count = 0;
-
-		// Asynchronous pipe event
-		virtual void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) {}
+		std::weak_ptr<PipeEventHandler> _pipe_handler;
 
 		// Can be a dialer or listener.
 		struct ListenerOrDialer
@@ -226,7 +245,7 @@ namespace telling
 		/*
 			Create a Communicator sharing another communicator's socket.
 		*/
-		Communicator(const Communicator& ) = default;
+		Communicator(const Communicator &other) = default;
 
 		/*
 			Can't assign, 
@@ -234,30 +253,6 @@ namespace telling
 		Communicator  (      Communicator&&) = delete;
 		void operator=(const Communicator& ) = delete;
 		void operator=(      Communicator&&) = delete;
-	};
-
-
-	/*
-		A socket which delivers pipe events to an AsyncOp.
-	*/
-	class Socket_withPipeEvents : public Socket
-	{
-	public:
-		Socket_withPipeEvents(
-			std::shared_ptr<AsyncOp_withPipeEvents> _op,
-			ROLE    _role,
-			PATTERN _pattern,
-			VARIANT _variant = STANDARD) :
-			Socket(_role, _pattern, _variant),
-			op(std::move(_op)) {}
-
-		~Socket_withPipeEvents() override {}
-
-
-	protected:
-		void pipeEvent(nng::pipe_view pipe, nng::pipe_ev event) override    {op->pipeEvent(this, pipe, event);}
-
-		std::shared_ptr<AsyncOp_withPipeEvents> op;
 	};
 
 	/*
@@ -268,15 +263,7 @@ namespace telling
 	{
 	public:
 		explicit Pattern_Base()                           : Communicator(T_Role, T_Pattern) {}
-		Pattern_Base(const Pattern_Base &shareSocket)     : Communicator(shareSocket)     {}
-
-		/*
-			Construct a Communicator around a pipe event handler.
-				Only ONE pipe handler per socket will actually receive events.
-				AsyncOps based on communicators sharing the socket won't get pipe events.
-		*/
-		Pattern_Base(std::shared_ptr<AsyncOp_withPipeEvents> op) :
-			Communicator(std::make_shared<Socket_withPipeEvents>(std::move(op), T_Role, T_Pattern)) {}
+		Pattern_Base(const Pattern_Base &shareSocket)     : Communicator(shareSocket)       {}
 
 		~Pattern_Base() override {}
 	};
@@ -305,26 +292,26 @@ namespace telling
 	void Dial(const HostAddress::Base &base, Args&... args)
 	{
 		try                          {ARGS_CALL_REF(dial(base));}
-		catch (nng::exception error) {ARGS_CALL_REF(disconnect(base)); throw error;}
+		catch (nng::exception error) {ARGS_CALL_REF(disconnect(base)); throw;}
 	}
 	template<class... Args>
 	void Dial(const HostAddress::Base &base, Args*... args)
 	{
 		try                          {ARGS_CALL_PTR(dial(base));}
-		catch (nng::exception error) {ARGS_CALL_PTR(disconnect(base)); throw error;}
+		catch (nng::exception error) {ARGS_CALL_PTR(disconnect(base)); throw;}
 	}
 
 	template<class... Args>
 	void Listen(const HostAddress::Base &base, Args&... args)
 	{
 		try                          {ARGS_CALL_REF(listen(base));}
-		catch (nng::exception error) {ARGS_CALL_REF(disconnect(base)); throw error;}
+		catch (nng::exception error) {ARGS_CALL_REF(disconnect(base)); throw;}
 	}
 	template<class... Args>
 	void Listen(const HostAddress::Base &base, Args*... args)
 	{
 		try                          {ARGS_CALL_PTR(listen(base));}
-		catch (nng::exception error) {ARGS_CALL_PTR(disconnect(base)); throw error;}
+		catch (nng::exception error) {ARGS_CALL_PTR(disconnect(base)); throw;}
 	}
 
 	#undef CALL_ON_ARGS

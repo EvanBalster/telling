@@ -10,13 +10,21 @@ using namespace telling::service;
 	Reply implementation
 */
 
-void Rep_Async::_init()
+void Rep_Async::initialize(std::weak_ptr<AsyncRespond> delegate)
 {
-	ctx_aio_recv = make_ctx();
+	if (_delegate.lock())
+		throw nng::exception(nng::error::busy, "Request_Async::initialize (already initialized)");
 
-	aio_send = nng::make_aio(&_aioSent, this);
-	aio_recv = nng::make_aio(&_aioReceived, this);
-	ctx_aio_recv.recv(aio_recv);
+	if (delegate.lock())
+	{
+		_delegate = delegate;
+
+		ctx_aio_recv = make_ctx();
+
+		aio_send = nng::make_aio(&_aioSent, this);
+		aio_recv = nng::make_aio(&_aioReceived, this);
+		ctx_aio_recv.recv(aio_recv);
+	}
 }
 Rep_Async::~Rep_Async()
 {
@@ -37,6 +45,7 @@ void Rep_Async::_aioReceived(void *_comm)
 	auto comm = static_cast<Rep_Async*>(_comm);
 	auto &ctx = comm->ctx_aio_recv;
 	auto queryID = ctx.get().id;
+	auto delegate = comm->_delegate.lock();
 
 	AsyncOp::DIRECTIVE directive = AsyncOp::TERMINATE;
 
@@ -44,11 +53,17 @@ void Rep_Async::_aioReceived(void *_comm)
 
 	// Call delegate
 	auto error = comm->aio_recv.result();
-	switch (error)
+	if (!delegate)
+	{
+		// No delegate; terminate
+		comm->aio_recv.release_msg();
+		directive = AsyncOp::TERMINATE;
+	}
+	else switch (error)
 	{
 	case nng::error::success:
 		{
-			AsyncOp::SendDirective react = comm->_delegate->asyncRespond_recv(
+			AsyncOp::SendDirective react = delegate->asyncRespond_recv(
 				queryID, std::move(comm->aio_recv.release_msg()));
 			directive = react.directive;
 
@@ -70,7 +85,7 @@ void Rep_Async::_aioReceived(void *_comm)
 	case nng::error::canceled:
 	case nng::error::timedout:
 	default:
-		directive = comm->_delegate->asyncRespond_error(
+		directive = delegate->asyncRespond_error(
 			ctx.get().id, error);
 		break;
 	}
@@ -201,16 +216,22 @@ public:
 
 
 Rep_Box::Rep_Box() :
-	Rep_Async(std::make_shared<Delegate>())
+	Rep_Async()
 {
-
+	_init();
 }
 Rep_Box::Rep_Box(const Rep_Base &shareSocket) :
-	Rep_Async(std::make_shared<Delegate>(), shareSocket)
+	Rep_Async(shareSocket)
 {
+	_init();
 }
 Rep_Box::~Rep_Box()
 {
+}
+
+void Rep_Box::_init()
+{
+	initialize(_replyBox = std::make_shared<Delegate>());
 }
 
 
@@ -223,10 +244,8 @@ bool Rep_Box::receive(nng::msg  &request)
 		throw nng::exception(nng::error::state,
 			"Reply: must reply before receiving a new message.");
 
-	auto delegate = reinterpret_cast<Delegate*>(&*_delegate);
-
 	Delegate::Pending front;
-	if (delegate->inbox.pull(front))
+	if (_replyBox->inbox.pull(front))
 	{
 		current_query = front.id;
 		request       = std::move(front.msg);
@@ -244,13 +263,13 @@ void Rep_Box::respond(nng::msg &&msg)
 		throw nng::exception(nng::error::state,
 			"Reply: must receive a request before replying.");
 
-	try
+	//try
 	{
 		respondTo(current_query, std::move(msg));
 		current_query = 0;
 	}
-	catch (nng::exception e)
+	/*catch (nng::exception e)
 	{
 		throw e;
-	}
+	}*/
 }

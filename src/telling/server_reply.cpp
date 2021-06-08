@@ -10,12 +10,18 @@ Server::Reply::Reply() :
 	reply_ext  (Role::SERVICE, Pattern::REQ_REP, Socket::RAW),
 	request_dvc(Role::CLIENT,  Pattern::REQ_REP, Socket::RAW),
 	reply_int  (Role::SERVICE, Pattern::REQ_REP, Socket::RAW),
-	rep_send(reply_int.socketView(), rep_sendQueue    = std::make_shared<AsyncSendQueue>()),
-	rep_recv(reply_int.socketView(), delegate_request = std::make_shared<Delegate_Request>(this)),
+	rep_send(reply_int.socketView()),
+	rep_recv(reply_int.socketView()),
 	delegate_reply(std::make_shared<Delegate_Reply>(this))
 {
 	auto server = this->server();
 	auto &log = server->log;
+
+	rep_sendQueue    = std::make_shared<AsyncSendQueue>();
+	delegate_request = std::make_shared<Delegate_Request>(this);
+
+	rep_send.send_init(rep_sendQueue);
+	rep_recv.recv_start(delegate_request);
 
 	// Set up device relay
 	reply_int  .listen(server->address_internal);

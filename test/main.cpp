@@ -352,7 +352,7 @@ int main(int argc, char **argv)
 	// Server needs no thread
 
 	cout << "==== Creating server." << endl;
-	auto server = std::make_shared<Server>();
+	auto server = std::make_shared<Server>(&std::cout);
 
 
 	std::string service_uri = "/voices";
@@ -456,7 +456,12 @@ int main(int argc, char **argv)
 								cout << endl;
 							}
 						}
-						catch (std::exception e)
+						catch (nng::exception &e)
+						{
+							cout << "\t...failed with NNG exception: " << e.what() << " in " << e.who() << endl;
+							cout << endl;
+						}
+						catch (std::exception &e)
 						{
 							cout << "\t...failed with exception: " << e.what() << endl;
 							cout << endl;

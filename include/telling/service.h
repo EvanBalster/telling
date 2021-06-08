@@ -21,7 +21,7 @@ namespace telling
 		/*
 			Publish a message to a topic (URI).
 		*/
-		void publish(nng::msg &&msg)         {_publisher.publish(std::move(msg));}
+		void publish(nng::msg &&msg) final   {_publisher.publish(std::move(msg));}
 
 
 		/*
@@ -116,14 +116,14 @@ namespace telling
 	class Service_Async : public Service_Base
 	{
 	public:
-		Service_Async(std::shared_ptr<ServiceHandler_Base> handler,
+		Service_Async(std::weak_ptr<ServiceHandler_Base> handler,
 			std::string _uri, std::string_view serverID = DefaultServerID());
 		~Service_Async();
 
 		/*
 			Publish a message to a topic (URI).
 		*/
-		void publish(nng::msg &&bulletin)                       {_publisher.publish(std::move(bulletin));}
+		void publish(nng::msg &&bulletin) final                 {_publisher.publish(std::move(bulletin));}
 
 		/*
 			Respond to the query with the given ID.
@@ -138,7 +138,7 @@ namespace telling
 
 
 	protected:
-		//std::shared_ptr<Handler> handler;
+		//std::weak_ptr<Handler> handler;
 		service::Reply_Async     _replier;
 		service::Pull_Async      _puller;
 		service::Publish_Async   _publisher;

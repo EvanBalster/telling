@@ -45,6 +45,11 @@ namespace telling
 		*/
 		void subscribe  (std::string_view topic)     {auto s=subscriber(); if (s) s->  subscribe(topic);}
 		void unsubscribe(std::string_view topic)     {auto s=subscriber(); if (s) s->unsubscribe(topic);}
+
+		/*
+			Push a request with no means of reply.
+		*/
+		virtual void push(nng::msg &&request) = 0;
 	};
 
 
@@ -61,7 +66,7 @@ namespace telling
 		/*
 			Push a message to the server. Throws nng::exception on failure.
 		*/
-		void push(nng::msg &&msg)                        {_pusher.push(std::move(msg));}
+		void push(nng::msg &&msg) final                  {_pusher.push(std::move(msg));}
 
 
 		/*
@@ -159,13 +164,13 @@ namespace telling
 
 
 	public:
-		Client_Async(std::shared_ptr<Handler> handler);
+		Client_Async(std::weak_ptr<Handler> handler);
 		~Client_Async();
 
 		/*
 			Push a message to the server. Throws nng::exception on failure.
 		*/
-		void push(nng::msg &&msg)                         {_pusher.push(std::move(msg));}
+		void push(nng::msg &&msg) final                   {_pusher.push(std::move(msg));}
 
 		/*
 			Create a request. Throws nng::exception on failure.
@@ -186,7 +191,7 @@ namespace telling
 
 
 	protected:
-		//std::shared_ptr<Handler> handler;
+		//std::weak_ptr<Handler> handler;
 		client::Request_Async    _requester;
 		client::Subscribe_Async  _subscriber;
 		client::Push_Async       _pusher;

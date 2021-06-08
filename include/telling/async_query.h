@@ -25,7 +25,7 @@ namespace telling
 		Callback interface for sending queries and getting responses.
 			Used for REQuest protocol, maybe Surveyor in the future.
 	*/
-	class AsyncQuery : public AsyncOp_withPipeEvents
+	class AsyncQuery : public AsyncOp
 	{
 	public:
 		class Context
@@ -61,7 +61,7 @@ namespace telling
 		Callback interface for responding to messages.
 			Used for REPly protocol, maybe Responder in the future.
 	*/
-	class AsyncRespond : public AsyncOp_withPipeEvents
+	class AsyncRespond : public AsyncOp
 	{
 	public:
 		virtual ~AsyncRespond() {}

@@ -28,9 +28,14 @@ namespace telling
 			/*
 				Construct with an AsyncSend delegate.
 			*/
-			Push_Async(std::shared_ptr<AsyncSend> p)                                   : Push_Base(p),           Operator(socketView(), p) {}
-			Push_Async(std::shared_ptr<AsyncSend> p, const Push_Base &shareSocket)     : Push_Base(shareSocket), Operator(socketView(), p) {}
+			Push_Async(std::weak_ptr<AsyncSend> p = {})                                   : Push_Base(),            Operator(socketView()) {initialize(p);}
+			Push_Async(const Push_Base &shareSocket, std::weak_ptr<AsyncSend> p = {})     : Push_Base(shareSocket), Operator(socketView()) {initialize(p);}
 			~Push_Async() {}
+
+			/*
+				Initialize with the provided delegate
+			*/
+			void initialize(std::weak_ptr<AsyncSend> p)    {Operator::send_init(p);}
 
 			/*
 				Attempt to push a message.
@@ -51,9 +56,14 @@ namespace telling
 		class Push_Box : public Push_Async
 		{
 		public:
-			explicit Push_Box()                       : Push_Async(std::make_shared<AsyncSendQueue>())              {}
-			Push_Box(const Push_Base &shareSocket)    : Push_Async(std::make_shared<AsyncSendQueue>(), shareSocket) {}
+			explicit Push_Box()                       : Push_Async()            {_init();}
+			Push_Box(const Push_Base &shareSocket)    : Push_Async(shareSocket) {_init();}
 			~Push_Box() {}
+
+
+		protected:
+			void _init()    {initialize(_queue = std::make_shared<AsyncSendQueue>());}
+			std::shared_ptr<AsyncSendQueue> _queue;
 		};
 
 

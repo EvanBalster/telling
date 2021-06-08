@@ -37,11 +37,11 @@ AsyncOp::SendDirective Client_Async::Handler::asyncSend_sent()
 }
 
 
-Client_Async::Client_Async(std::shared_ptr<Handler> _handler) :
+Client_Async::Client_Async(std::weak_ptr<Handler> _handler) :
 	//handler(std::move(_handler)),
-	_requester (std::static_pointer_cast<AsyncQuery>(_handler)),
-	_subscriber(std::static_pointer_cast<AsyncRecv >(_handler)),
-	_pusher    (std::static_pointer_cast<AsyncSend >(_handler))
+	_requester (_handler),
+	_subscriber(_handler),
+	_pusher    (_handler)
 {
 }
 Client_Async::~Client_Async()

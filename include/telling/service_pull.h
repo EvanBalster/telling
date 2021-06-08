@@ -29,9 +29,14 @@ namespace telling
 				Construct with an AsyncRecv delegate.
 					Begins listening for messages immediately.
 			*/
-			Pull_Async(std::shared_ptr<AsyncRecv> p)                                   : Pull_Base(p),           Operator(socketView(), p) {}
-			Pull_Async(std::shared_ptr<AsyncRecv> p, const Pull_Base &shareSocket)     : Pull_Base(shareSocket), Operator(socketView(), p) {}
+			Pull_Async(std::weak_ptr<AsyncRecv> p = {})                                   : Pull_Base(),            Operator(socketView()) {initialize(p);}
+			Pull_Async(const Pull_Base &shareSocket, std::weak_ptr<AsyncRecv> p = {})     : Pull_Base(shareSocket), Operator(socketView()) {initialize(p);}
 			~Pull_Async() {}
+
+			/*
+				Start receiving through the provided delegate.
+			*/
+			void initialize(std::weak_ptr<AsyncRecv> p)    {Operator::recv_start(p);}
 		};
 
 
@@ -42,15 +47,20 @@ namespace telling
 		class Pull_Box : public Pull_Async
 		{
 		public:
-			explicit Pull_Box()                       : Pull_Async(std::make_shared<AsyncRecvQueue>())              {}
-			Pull_Box(const Pull_Base &shareSocket)    : Pull_Async(std::make_shared<AsyncRecvQueue>(), shareSocket) {}
+			explicit Pull_Box()                       : Pull_Async()            {_init();}
+			Pull_Box(const Pull_Base &shareSocket)    : Pull_Async(shareSocket) {_init();}
 			~Pull_Box() {}
 			
 
 			/*
 				Check for pulled messages.  Non-blocking.
 			*/
-			bool pull(nng::msg &msg)    {return static_cast<AsyncRecvQueue*>(&*recv_delegate())->pull(msg);}
+			bool pull(nng::msg &msg)    {return _queue->pull(msg);}
+
+
+		protected:
+			void _init()    {initialize(_queue = std::make_shared<AsyncRecvQueue>());}
+			std::shared_ptr<AsyncRecvQueue> _queue;
 		};
 	}
 	

@@ -19,8 +19,8 @@ namespace telling
 		class Sub_Base : public Sub_Pattern
 		{
 		public:
-			Sub_Base(std::shared_ptr<AsyncOp_withPipeEvents> p)    : Sub_Pattern(p)           {}
-			Sub_Base(const Sub_Base &shareSocket)                  : Sub_Pattern(shareSocket) {}
+			Sub_Base()                               : Sub_Pattern()            {}
+			Sub_Base(const Sub_Base &shareSocket)    : Sub_Pattern(shareSocket) {}
 			~Sub_Base() {}
 
 			/*
@@ -49,9 +49,14 @@ namespace telling
 				Construct with an AsyncRecv delegate.
 					Begins listening for messages immediately.
 			*/
-			Sub_Async(std::shared_ptr<AsyncRecv> p)                                  : Sub_Base(p),           Operator(make_ctx(), p) {}
-			Sub_Async(std::shared_ptr<AsyncRecv> p, const Sub_Base &shareSocket)     : Sub_Base(shareSocket), Operator(make_ctx(), p) {}
+			Sub_Async(std::weak_ptr<AsyncRecv> p = {})                                  : Sub_Base(),            Operator(make_ctx()) {initialize(p);}
+			Sub_Async(const Sub_Base &shareSocket, std::weak_ptr<AsyncRecv> p = {})     : Sub_Base(shareSocket), Operator(make_ctx()) {initialize(p);}
 			~Sub_Async() {}
+
+			/*
+				Start receiving through the provided delegate.
+			*/
+			void initialize(std::weak_ptr<AsyncRecv> p)    {Operator::recv_start(p);}
 
 			/*
 				Manage subscriptions.
@@ -67,8 +72,8 @@ namespace telling
 		class Sub_Box : public Sub_Async
 		{
 		public:
-			explicit Sub_Box()                      : Sub_Async(std::make_shared<AsyncRecvQueue>())              {}
-			Sub_Box(const Sub_Base &shareSocket)    : Sub_Async(std::make_shared<AsyncRecvQueue>(), shareSocket) {}
+			explicit Sub_Box()                      : Sub_Async()            {_init();}
+			Sub_Box(const Sub_Base &shareSocket)    : Sub_Async(shareSocket) {_init();}
 			~Sub_Box() {}
 			
 
@@ -76,7 +81,12 @@ namespace telling
 				Check for messages from subscribed topics.
 					Non-blocking.
 			*/
-			bool consume(nng::msg &msg)    {return static_cast<AsyncRecvQueue*>(&*recv_delegate())->pull(msg);}
+			bool consume(nng::msg &msg)    {return _queue->pull(msg);}
+
+
+		protected:
+			void _init()    {initialize(_queue = std::make_shared<AsyncRecvQueue>());}
+			std::shared_ptr<AsyncRecvQueue> _queue;
 		};
 	}
 }

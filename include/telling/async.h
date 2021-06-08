@@ -55,23 +55,12 @@ namespace telling
 
 	class Socket;
 
-	/*
-		Adds optional pipe events to async handlers.
-	*/
-	class AsyncOp_withPipeEvents : public AsyncOp
-	{
-	public:
-		virtual ~AsyncOp_withPipeEvents() {}
-
-		virtual void pipeEvent(Socket *socket, nng::pipe_view pipe, nng::pipe_ev event) {}
-	};
-
 
 	/*
 		Callback interface for receiving messages.
 			Used for PULL and SUBscribe protocols.
 	*/
-	class AsyncRecv : public AsyncOp_withPipeEvents
+	class AsyncRecv : public AsyncOp
 	{
 	public:
 		virtual ~AsyncRecv() {}
@@ -99,22 +88,22 @@ namespace telling
 		class Operator
 		{
 		public:
-			Operator(T_RecvCtx &&_ctx, std::shared_ptr<AsyncRecv> _delegate, bool begin = true);
+			Operator(T_RecvCtx &&_ctx);
 			~Operator();
 
 			// Start/stop receiving.  Start may throw exceptions on failure.
-			void recv_start();
-			void recv_stop()  noexcept;
+			void recv_start(std::weak_ptr<AsyncRecv> _delegate);
+			void recv_stop ()  noexcept;
 
 			T_RecvCtx       &recv_ctx()       noexcept    {return _recv_ctx;}
 			const T_RecvCtx &recv_ctx() const noexcept    {return _recv_ctx;}
 
-			std::shared_ptr<AsyncRecv> recv_delegate() const    {return _recv_delegate;}
+			std::weak_ptr<AsyncRecv> recv_delegate() const    {return _recv_delegate;}
 
 		private:
-			nng::aio                   _recv_aio;
-			T_RecvCtx                  _recv_ctx;
-			std::shared_ptr<AsyncRecv> _recv_delegate;
+			nng::aio                 _recv_aio;
+			T_RecvCtx                _recv_ctx;
+			std::weak_ptr<AsyncRecv> _recv_delegate;
 		};
 	};
 
@@ -125,7 +114,7 @@ namespace telling
 		After a successful send, we may send another message by returning
 			CONTINUE and filling in sendMsg.
 	*/
-	class AsyncSend : public AsyncOp_withPipeEvents
+	class AsyncSend : public AsyncOp
 	{
 	public:
 		virtual ~AsyncSend() {}
@@ -149,25 +138,26 @@ namespace telling
 		class Operator
 		{
 		public:
-			Operator(T_SendCtx &&_ctx, std::shared_ptr<AsyncSend> _delegate);
+			Operator(T_SendCtx &&_ctx);
 			~Operator();
 
 			/*
 				send_msg may throw an exception if the delegate refuses.
 				send_stop halts sending.
 			*/
-			void send_msg(nng::msg &&msg);
+			void send_init(std::weak_ptr<AsyncSend> _delegate);
+			void send_msg (nng::msg &&msg);
 			void send_stop()              noexcept;
 
 			T_SendCtx       &send_ctx()       noexcept    {return _send_ctx;}
 			const T_SendCtx &send_ctx() const noexcept    {return _send_ctx;}
 
-			std::shared_ptr<AsyncSend> send_delegate() const    {return _send_delegate;}
+			std::weak_ptr<AsyncSend> send_delegate() const    {return _send_delegate;}
 
 		private:
-			nng::aio                   _send_aio;
-			T_SendCtx                  _send_ctx;
-			std::shared_ptr<AsyncSend> _send_delegate;
+			nng::aio                 _send_aio;
+			T_SendCtx                _send_ctx;
+			std::weak_ptr<AsyncSend> _send_delegate;
 		};
 	};
 
@@ -181,11 +171,19 @@ namespace telling
 		void AsyncRecv_Callback_Self(void *_self)
 		{
 			auto *self = static_cast<T_Self*>(_self);
-			nng::aio   &aio      = self->*Member_aio;
-			auto       &ctx      = self->*Member_ctx;
-			const auto &delegate = self->*Member_delegate;
+			nng::aio   &aio      =  self->*Member_aio;
+			auto       &ctx      =  self->*Member_ctx;
+			const auto  delegate = (self->*Member_delegate).lock();
 
 			nng::error aioResult = aio.result();
+
+			if (!delegate)
+			{
+				// Stop receiving if there is no delegate.
+				if (aioResult == nng::error::success) aio.release_msg();
+				return;
+			}
+
 			AsyncOp::Directive directive =
 				(aioResult == nng::error::success)
 				? delegate->asyncRecv_msg  (aio.release_msg())
@@ -214,8 +212,8 @@ namespace telling
 		void AsyncRecv_Setup(T_Self *self)
 		{
 			nng::aio   &aio      = self->*Member_aio;
-			auto       &ctx      = self->*Member_ctx;
-			const auto &delegate = self->*Member_delegate;
+			//auto       &ctx      = self->*Member_ctx;
+			//const auto &delegate = self->*Member_delegate;
 			aio = nng::make_aio(&AsyncRecv_Callback_Self<Member_aio, Member_ctx, Member_delegate, T_Self>, self);
 		}
 
@@ -224,11 +222,18 @@ namespace telling
 		void AsyncSend_Callback_Self(void *_self)
 		{
 			auto *self = static_cast<T_Self*>(_self);
-			nng::aio   &aio      = self->*Member_aio;
-			auto       &ctx      = self->*Member_ctx;
-			const auto &delegate = self->*Member_delegate;
+			nng::aio   &aio      =  self->*Member_aio;
+			auto       &ctx      =  self->*Member_ctx;
+			const auto  delegate = (self->*Member_delegate).lock();
 
 			nng::error aioResult = aio.result();
+
+			if (!delegate)
+			{
+				// Stop sending if there is no delegate.
+				return;
+			}
+
 			AsyncOp::SendDirective directive =
 				(aioResult == nng::error::success)
 				? delegate->asyncSend_sent ()
@@ -260,24 +265,22 @@ namespace telling
 		void AsyncSend_Setup(T_Self *self)
 		{
 			nng::aio   &aio      = self->*Member_aio;
-			auto       &ctx      = self->*Member_ctx;
-			const auto &delegate = self->*Member_delegate;
+			//auto       &ctx      = self->*Member_ctx;
+			//const auto &delegate = self->*Member_delegate;
 			aio = nng::make_aio(&AsyncSend_Callback_Self<Member_aio, Member_ctx, Member_delegate, T_Self>, self);
 		}
 	}
 
 
 	template<typename T_RecvCtx>
-	AsyncRecv::Operator<T_RecvCtx>::Operator(T_RecvCtx &&_ctx, std::shared_ptr<AsyncRecv> _delegate, bool autoStart) :
-		_recv_ctx(std::move(_ctx)), _recv_delegate(std::move(_delegate))
+	AsyncRecv::Operator<T_RecvCtx>::Operator(T_RecvCtx &&_ctx) :
+		_recv_ctx(std::move(_ctx))
 	{
 		detail::AsyncRecv_Setup<
 			&Operator::_recv_aio,
 			&Operator::_recv_ctx,
 			&Operator::_recv_delegate>
 			(this);
-		if (autoStart)
-			recv_start();
 	}
 	template<typename T_RecvCtx>
 	AsyncRecv::Operator<T_RecvCtx>::~Operator()
@@ -286,23 +289,30 @@ namespace telling
 	}
 
 	template<typename T_RecvCtx>
-	void AsyncRecv::Operator<T_RecvCtx>::recv_start()
+	void AsyncRecv::Operator<T_RecvCtx>::recv_start(std::weak_ptr<AsyncRecv> _delegate)
 	{
-		_recv_delegate->asyncRecv_start(); // May throw
+		if (_recv_delegate.lock())
+			throw nng::exception(nng::error::busy, "Receive start: already started");
 
-		_recv_ctx.recv(_recv_aio);
+		if (auto delegate = _delegate.lock())
+		{
+			_recv_delegate = std::move(_delegate);
+			delegate->asyncRecv_start(); // May throw
+			_recv_ctx.recv(_recv_aio);
+		}
 	}
 	template<typename T_RecvCtx>
 	void AsyncRecv::Operator<T_RecvCtx>::recv_stop() noexcept
 	{
 		_recv_aio.stop();
-		_recv_delegate->asyncRecv_stop(nng::error::success);
+		if (auto delegate = _recv_delegate.lock())
+			delegate->asyncRecv_stop(nng::error::success);
 	}
 
 
 	template<typename T_SendCtx>
-	AsyncSend::Operator<T_SendCtx>::Operator(T_SendCtx &&_ctx, std::shared_ptr<AsyncSend> _delegate) :
-		_send_ctx(_ctx), _send_delegate(std::move(_delegate))
+	AsyncSend::Operator<T_SendCtx>::Operator(T_SendCtx &&_ctx) :
+		_send_ctx(_ctx)
 	{
 		detail::AsyncSend_Setup<
 			&Operator::_send_aio,
@@ -314,13 +324,32 @@ namespace telling
 	AsyncSend::Operator<T_SendCtx>::~Operator()
 	{
 		_send_aio.stop();
-		_send_delegate->asyncSend_stop(nng::error::success);
+		if (auto delegate = _send_delegate.lock())
+			delegate->asyncSend_stop(nng::error::success);
+	}
+
+	template<typename T_SendCtx>
+	void AsyncSend::Operator<T_SendCtx>::send_init(std::weak_ptr<AsyncSend> _delegate)
+	{
+		if (_send_delegate.lock())
+			throw nng::exception(nng::error::busy, "Send start: already started");
+
+		if (auto delegate = _delegate.lock())
+		{
+			_send_delegate = std::move(_delegate);
+		}
 	}
 
 	template<typename T_SendCtx>
 	void AsyncSend::Operator<T_SendCtx>::send_msg(nng::msg &&msg)
 	{
-		SendDirective directive = _send_delegate->asyncSend_msg(std::move(msg));
+		auto delegate = _send_delegate.lock();
+
+		SendDirective directive =
+			(delegate
+				? delegate->asyncSend_msg(std::move(msg))
+				: SendDirective(TERMINATE));
+		
 		switch (directive.directive)
 		{
 		default:

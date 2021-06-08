@@ -40,10 +40,9 @@ HttpClient_Async::MsgStats HttpClient_Async::msgStats() const noexcept
 }
 
 
-HttpClient_Async::HttpClient_Async(std::shared_ptr<Handler> handler, nng::url &&_host) :
+HttpClient_Async::HttpClient_Async(nng::url &&_host, std::weak_ptr<Handler> handler) :
 	HttpClient_Base(std::move(_host)),
-	client(host),
-	_handler(handler)
+	client(host)
 {
 	if (this->host->u_scheme == std::string_view("https"))
 	{
@@ -53,6 +52,8 @@ HttpClient_Async::HttpClient_Async(std::shared_ptr<Handler> handler, nng::url &&
 		//tls. ;
 		client.set_tls(tls);
 	}
+
+	initialize(handler);
 }
 HttpClient_Async::~HttpClient_Async()
 {
@@ -82,6 +83,16 @@ HttpClient_Async::~HttpClient_Async()
 }
 
 
+void HttpClient_Async::initialize(std::weak_ptr<Handler> handler)
+{
+	if (_handler.lock())
+		throw nng::exception(nng::error::busy, "HttpClient_Async::initialize (already initialized)");
+
+	if (handler.lock())
+		_handler = handler;
+}
+
+
 
 QueryID HttpClient_Async::request(nng::msg &&req)
 {
@@ -104,7 +115,10 @@ QueryID HttpClient_Async::request(nng::msg &&req)
 
 		action->queryID = nextQueryID++;
 
-		auto directive = _handler->httpQuery_made(action->queryID, req);
+		auto handler = _handler.lock();
+
+		AsyncOp::Directive directive =
+			(handler ? handler->httpQuery_made(action->queryID, req) : AsyncOp::Directive(AsyncOp::TERMINATE));
 
 		switch (directive)
 		{
@@ -136,48 +150,50 @@ void HttpClient_Async::Action::_callback(void *_action)
 {
 	auto action = static_cast<HttpClient_Async::Action*>(_action);
 	auto client = action->client;
-	auto &handler = client->_handler;
+	auto handler = client->_handler.lock();
 
 	AsyncOp::DIRECTIVE directive;
 	bool cleanup = false;
 
-	// Errors?
+	// Callbacks / Errors?
 	auto error = action->aio.result();
-	switch (error)
+	if (!handler)
 	{
-	case nng::error::success:  break;
+		directive = AsyncOp::TERMINATE;
+	}
+	else switch (error)
+	{
+	case nng::error::success:
+		switch (action->state)
+		{
+		case CONNECT:
+			action->conn = nng::http::conn(action->aio.get_output<nng_http_conn>(0));
+			handler->httpConn_open(action->conn);
+			directive = AsyncOp::CONTINUE;
+			break;
+		case SEND:
+			// Send
+			directive = handler->httpQuery_sent(action->queryID);
+			action->req = nng::msg();
+			break;
+		case RECV:
+			// Receive the response
+			action->res.body().chop(action->res.body().size() - action->aio.count());
+			directive = handler->httpQuery_done(action->queryID, std::move(action->res));
+			action->res = nng::msg();
+			cleanup = true;
+		default:
+		case IDLE:
+			// Shouldn't happen???
+			cleanup = true;
+			break;
+		}
+		break;
 	case nng::error::canceled:
 	case nng::error::timedout:
 	default:
 		// Causes the query to be canceled.
 		directive = handler->httpQuery_error(action->queryID, error);
-		cleanup = true;
-		break;
-	}
-
-	// Deliver callbacks
-	if (error == nng::error::success)
-		switch (action->state)
-	{
-	case CONNECT:
-		action->conn = nng::http::conn(action->aio.get_output<nng_http_conn>(0));
-		handler->httpConn_open(action->conn);
-		directive = AsyncOp::CONTINUE;
-		break;
-	case SEND:
-		// Send
-		directive = handler->httpQuery_sent(action->queryID);
-		action->req = nng::msg();
-		break;
-	case RECV:
-		// Receive the response
-		action->res.body().chop(action->res.body().size() - action->aio.count());
-		directive = handler->httpQuery_done(action->queryID, std::move(action->res));
-		action->res = nng::msg();
-		cleanup = true;
-	default:
-	case IDLE:
-		// Shouldn't happen???
 		cleanup = true;
 		break;
 	}
@@ -337,13 +353,18 @@ public:
 };
 
 HttpClient_Box::HttpClient_Box(nng::url &&_host) :
-	HttpClient_Async(std::make_shared<Delegate>(), std::move(_host))
+	HttpClient_Async(std::move(_host))
 {
+	_init();
+}
 
+void HttpClient_Box::_init()
+{
+	initialize(_httpBox = std::make_shared<Delegate>());
 }
 
 std::future<nng::msg> HttpClient_Box::request(nng::msg &&msg)
 {
 	auto qid = this->HttpClient_Async::request(std::move(msg));
-	return static_cast<Delegate*>(&*_handler)->getFuture(qid);
+	return _httpBox->getFuture(qid);
 }

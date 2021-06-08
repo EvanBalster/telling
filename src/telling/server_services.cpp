@@ -7,7 +7,7 @@ using namespace telling;
 using std::endl;
 
 
-class Server::Services::RegisterResponder : public AsyncRespond
+class Server::Services::RegisterResponder : public AsyncRespond, public Socket::PipeEventHandler
 {
 public:
 	std::mutex mtx;
@@ -63,6 +63,8 @@ Server::Services::Services() :
 	register_responder(std::make_shared<RegisterResponder>(this)),
 	register_reply(register_responder)
 {
+	register_reply.socket()->setPipeHandler(register_responder);
+
 	map.burst_threshold(256);
 
 
@@ -320,9 +322,11 @@ void Server::Services::run_management_thread()
 Server::Route::Route(Server &_server, std::string _path) :
 	server(_server), path(_path),
 	req(*this),
-	req_send(req.socketView(), req_sendQueue = std::make_shared<AsyncSendQueue>()),
-	req_recv(req.socketView(), server.reply.reply_handler(), true)
+	req_send(req.socketView()),
+	req_recv(req.socketView())
 {
+	req_send.send_init(req_sendQueue = std::make_shared<AsyncSendQueue>());
+	req_recv.recv_start(server.reply.reply_handler());
 }
 Server::Route::~Route()
 {

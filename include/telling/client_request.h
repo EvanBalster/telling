@@ -22,8 +22,8 @@ namespace telling
 		class Req_Base : public Req_Pattern
 		{
 		public:
-			Req_Base(std::shared_ptr<AsyncOp_withPipeEvents> p)    : Req_Pattern(p)           {}
-			Req_Base(const Req_Base &shareSocket)                  : Req_Pattern(shareSocket) {}
+			Req_Base()                               : Req_Pattern()           {}
+			Req_Base(const Req_Base &shareSocket)    : Req_Pattern(shareSocket) {}
 			~Req_Base() {}
 			
 			
@@ -53,9 +53,15 @@ namespace telling
 		class Req_Async : public Req_Base
 		{
 		public:
-			Req_Async(std::shared_ptr<AsyncQuery> p)                                 : Req_Base(p),           _delegate(p) {}
-			Req_Async(std::shared_ptr<AsyncQuery> p, const Req_Base &shareSocket)    : Req_Base(shareSocket), _delegate(p) {}
+			Req_Async(std::weak_ptr<AsyncQuery> p = {})                                 : Req_Base()            {initialize(p);}
+			Req_Async(const Req_Base &shareSocket, std::weak_ptr<AsyncQuery> p = {})    : Req_Base(shareSocket) {initialize(p);}
 			~Req_Async();
+
+			/*
+				Provide a delegate for handling requests after construction.
+					Throws nng::exception if a delegate has already been installed.
+			*/
+			void initialize(std::weak_ptr<AsyncQuery>);
 
 			/*
 				Initiate a request.
@@ -71,7 +77,7 @@ namespace telling
 
 
 		protected:
-			std::shared_ptr<AsyncQuery> _delegate;
+			std::weak_ptr<AsyncQuery> _delegate;
 
 			enum ACTION_STATE
 			{
@@ -108,6 +114,8 @@ namespace telling
 
 		protected:
 			class Delegate;
+			void _init();
+			std::shared_ptr<Delegate> _requestBox;
 		};
 	}
 }

@@ -29,13 +29,13 @@ void Service_Base::registerURI(std::string_view serverID)
 }
 
 
-Service_Async::Service_Async(std::shared_ptr<ServiceHandler_Base> _handler,
+Service_Async::Service_Async(std::weak_ptr<ServiceHandler_Base> _handler,
 	std::string _uri, std::string_view serverID)
 	: Service_Base(_uri, serverID),
 	//handler(std::move(_handler)),
-	_replier  (std::static_pointer_cast<AsyncRespond>(_handler)),
-	_puller   (std::static_pointer_cast<AsyncRecv   >(_handler)),
-	_publisher(std::static_pointer_cast<AsyncSend   >(_handler))
+	_replier  (_handler),
+	_puller   (_handler),
+	_publisher(_handler)
 {
 	listen(inProcAddress());
 }

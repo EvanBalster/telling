@@ -73,8 +73,15 @@ namespace telling
 
 	public:
 		// Construct with URL of host.
-		HttpClient_Async(std::shared_ptr<Handler>, nng::url &&_host);
+		HttpClient_Async(nng::url &&_host, std::weak_ptr<Handler> = {});
 		~HttpClient_Async() override;
+
+
+		/*
+			Install a handler after construction.
+				Throws nng::exception if a handler is already installed.
+		*/
+		void initialize(std::weak_ptr<Handler>);
 
 
 		/*
@@ -94,7 +101,7 @@ namespace telling
 		nng::http::client client;
 		nng::tls::config  tls;
 
-		std::shared_ptr<Handler> _handler;
+		std::weak_ptr<Handler> _handler;
 
 		enum ACTION_STATE
 		{
@@ -132,5 +139,7 @@ namespace telling
 
 	protected:
 		class Delegate;
+		void _init();
+		std::shared_ptr<Delegate> _httpBox;
 	};
 }

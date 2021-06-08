@@ -50,6 +50,11 @@ namespace telling
 		virtual service::Reply_Base   *replier()   noexcept = 0;
 		virtual service::Publish_Base *publisher() noexcept = 0;
 		virtual service::Pull_Base    *puller()    noexcept = 0;
+
+		/*
+			Publish a message to a topic (URI).
+		*/
+		virtual void publish(nng::msg &&bulletin) = 0;
 	};
 
 
