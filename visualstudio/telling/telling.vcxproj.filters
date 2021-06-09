@@ -1,0 +1,162 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="client">
+      <UniqueIdentifier>{6f292261-eee0-40e8-8486-b6bdc2423399}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="service">
+      <UniqueIdentifier>{89660c87-15f0-45c5-b991-cc532e6c1cf5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="server">
+      <UniqueIdentifier>{cadbaafe-43a9-44bc-b779-928f3a513879}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common">
+      <UniqueIdentifier>{22a53525-3789-4d59-a1f8-41c0dae67662}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="msg">
+      <UniqueIdentifier>{7d037a96-991b-402f-887a-bb8283012dbb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="http">
+      <UniqueIdentifier>{f1f9bddc-e565-4e76-87c7-70e5f7473348}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\include\telling\client.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\client_push.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\client_subscribe.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\client_request.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\server.h">
+      <Filter>server</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\service.h">
+      <Filter>service</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\service_pull.h">
+      <Filter>service</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\service_reply.h">
+      <Filter>service</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\service_publish.h">
+      <Filter>service</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\socket.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\pattern.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\host_address.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\async.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\async_queue.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg_headers.h">
+      <Filter>msg</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg_util.h">
+      <Filter>msg</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg_view.h">
+      <Filter>msg</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg_writer.h">
+      <Filter>msg</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\async_future.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg_status.h">
+      <Filter>msg</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg_method.h">
+      <Filter>msg</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\io_queue.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\async_query.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\service_registration.h">
+      <Filter>service</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\service_base.h">
+      <Filter>service</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\deposit.h" />
+    <ClInclude Include="..\..\include\telling\afar.h" />
+    <ClInclude Include="..\..\include\telling\http_client.h">
+      <Filter>http</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg_protocol.h">
+      <Filter>msg</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg_uri.h">
+      <Filter>msg</Filter>
+    </ClInclude>
+    <ClInclude Include="weak_anchor.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\telling\client.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\client_request.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\client_subscribe.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\socket.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\msg_util.cpp">
+      <Filter>msg</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\msg_view.cpp">
+      <Filter>msg</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\msg_writer.cpp">
+      <Filter>msg</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\server.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\server_publish.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\server_pull.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\server_reply.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\server_services.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\service.cpp">
+      <Filter>service</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\service_registration.cpp">
+      <Filter>service</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\service_reply.cpp">
+      <Filter>service</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\http_client.cpp">
+      <Filter>http</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

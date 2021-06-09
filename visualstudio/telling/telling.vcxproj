@@ -1,0 +1,194 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{322AAFEA-9B3C-4426-9FD4-FC5A2E45E721}</ProjectGuid>
+    <RootNamespace>telling</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141_xp</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141_xp</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141_xp</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141_xp</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IncludePath>$(SolutionDir)..\thirdparty\include;$(SolutionDir)..\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IncludePath>$(SolutionDir)..\thirdparty\include;$(SolutionDir)..\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>$(SolutionDir)..\thirdparty\include;$(SolutionDir)..\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(SolutionDir)..\thirdparty\include;$(SolutionDir)..\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>NNG_STATIC_LIB=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/w44265 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>NNG_STATIC_LIB=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/w44265 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>NNG_STATIC_LIB=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/w44265 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>NNG_STATIC_LIB=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/w44265 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\include\telling\async.h" />
+    <ClInclude Include="..\..\include\telling\async_future.h" />
+    <ClInclude Include="..\..\include\telling\async_query.h" />
+    <ClInclude Include="..\..\include\telling\async_queue.h" />
+    <ClInclude Include="..\..\include\telling\client.h" />
+    <ClInclude Include="..\..\include\telling\client_push.h" />
+    <ClInclude Include="..\..\include\telling\client_request.h" />
+    <ClInclude Include="..\..\include\telling\client_subscribe.h" />
+    <ClInclude Include="..\..\include\telling\deposit.h" />
+    <ClInclude Include="..\..\include\telling\msg_protocol.h" />
+    <ClInclude Include="..\..\include\telling\http_client.h" />
+    <ClInclude Include="..\..\include\telling\msg_method.h" />
+    <ClInclude Include="..\..\include\telling\msg_status.h" />
+    <ClInclude Include="..\..\include\telling\msg_uri.h" />
+    <ClInclude Include="..\..\include\telling\msg_writer.h" />
+    <ClInclude Include="..\..\include\telling\msg_headers.h" />
+    <ClInclude Include="..\..\include\telling\io_queue.h" />
+    <ClInclude Include="..\..\include\telling\msg_util.h" />
+    <ClInclude Include="..\..\include\telling\msg_view.h" />
+    <ClInclude Include="..\..\include\telling\pattern.h" />
+    <ClInclude Include="..\..\include\telling\service_base.h" />
+    <ClInclude Include="..\..\include\telling\service_registration.h" />
+    <ClInclude Include="..\..\include\telling\afar.h" />
+    <ClInclude Include="..\..\include\telling\socket.h" />
+    <ClInclude Include="..\..\include\telling\host_address.h" />
+    <ClInclude Include="..\..\include\telling\service_publish.h" />
+    <ClInclude Include="..\..\include\telling\service_pull.h" />
+    <ClInclude Include="..\..\include\telling\server.h" />
+    <ClInclude Include="..\..\include\telling\service.h" />
+    <ClInclude Include="..\..\include\telling\service_reply.h" />
+    <ClInclude Include="weak_anchor.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\telling\client.cpp" />
+    <ClCompile Include="..\..\src\telling\client_request.cpp" />
+    <ClCompile Include="..\..\src\telling\client_subscribe.cpp" />
+    <ClCompile Include="..\..\src\telling\msg_util.cpp" />
+    <ClCompile Include="..\..\src\telling\msg_view.cpp" />
+    <ClCompile Include="..\..\src\telling\msg_writer.cpp" />
+    <ClCompile Include="..\..\src\telling\server.cpp" />
+    <ClCompile Include="..\..\src\telling\server_publish.cpp" />
+    <ClCompile Include="..\..\src\telling\server_pull.cpp" />
+    <ClCompile Include="..\..\src\telling\server_reply.cpp" />
+    <ClCompile Include="..\..\src\telling\server_services.cpp" />
+    <ClCompile Include="..\..\src\telling\service.cpp" />
+    <ClCompile Include="..\..\src\telling\service_registration.cpp" />
+    <ClCompile Include="..\..\src\telling\service_reply.cpp" />
+    <ClCompile Include="..\..\src\telling\socket.cpp" />
+    <ClCompile Include="..\..\src\telling\http_client.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
