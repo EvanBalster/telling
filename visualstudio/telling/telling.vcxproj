@@ -168,7 +168,6 @@
     <ClInclude Include="..\..\include\telling\server.h" />
     <ClInclude Include="..\..\include\telling\service.h" />
     <ClInclude Include="..\..\include\telling\service_reply.h" />
-    <ClInclude Include="weak_anchor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\telling\client.cpp" />

@@ -107,7 +107,6 @@
     <ClInclude Include="..\..\include\telling\msg_uri.h">
       <Filter>msg</Filter>
     </ClInclude>
-    <ClInclude Include="weak_anchor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\telling\client.cpp">
