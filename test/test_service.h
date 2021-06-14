@@ -25,7 +25,7 @@ namespace telling_test
 			Receiver(Test_Responder &_service, std::string _reply) : service(&_service), txt_reply(_reply) {}
 			~Receiver() {}
 
-			SendDirective recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
+			Directive recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
 			{
 				MsgView::Request req;
 				try
@@ -93,7 +93,7 @@ namespace telling_test
 			Receiver(Test_Reflector &_service) : service(&_service) {}
 			~Receiver() {}
 
-			SendDirective recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
+			Directive recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
 			{
 				MsgView::Request req;
 				try

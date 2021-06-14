@@ -140,7 +140,6 @@
   <ItemGroup>
     <ClInclude Include="..\..\include\telling\async.h" />
     <ClInclude Include="..\..\include\telling\async_future.h" />
-    <ClInclude Include="..\..\include\telling\async_query.h" />
     <ClInclude Include="..\..\include\telling\async_queue.h" />
     <ClInclude Include="..\..\include\telling\client.h" />
     <ClInclude Include="..\..\include\telling\client_push.h" />

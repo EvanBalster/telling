@@ -13,16 +13,16 @@ Client_Box::~Client_Box()
 }
 
 
-AsyncOp::SendDirective Client_Async::Handler::asyncSend_msg(nng::msg &&msg)
+Directive Client_Async::Handler::asyncSend_msg(nng::msg &&msg)
 {
 	if (pushQueue.produce(std::move(msg))) return CONTINUE;
-	return SendDirective(std::move(msg));
+	return std::move(msg);
 }
-AsyncOp::SendDirective Client_Async::Handler::asyncSend_sent()
+Directive Client_Async::Handler::asyncSend_sent()
 {
 	auto direct = this->push_sent();
 
-	if (!direct.sendMsg) switch (direct.directive)
+	if (!direct.msg()) switch (direct)
 	{
 	case DECLINE: case TERMINATE:
 		// Interrupt sending

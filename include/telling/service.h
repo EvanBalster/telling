@@ -83,28 +83,28 @@ namespace telling
 		virtual Methods       allowed() const noexcept = 0;
 
 		// Safe methods (no PUSH support)
-		virtual SendDirective recv_get    (QueryID id, const MsgView::Request &req, nng::msg &&msg) = 0;
-		virtual SendDirective recv_head   (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
-		virtual SendDirective recv_trace  (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
-		virtual SendDirective recv_options(QueryID id, const MsgView::Request &req, nng::msg &&msg);
+		virtual Directive recv_get    (QueryID id, const MsgView::Request &req, nng::msg &&msg) = 0;
+		virtual Directive recv_head   (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual Directive recv_trace  (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual Directive recv_options(QueryID id, const MsgView::Request &req, nng::msg &&msg);
 
 		// Idempotent methods
-		virtual SendDirective recv_put    (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
-		virtual SendDirective recv_delete (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual Directive recv_put    (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual Directive recv_delete (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
 
 		// Other methods
-		virtual SendDirective recv_patch  (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
-		virtual SendDirective recv_post   (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual Directive recv_patch  (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual Directive recv_post   (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
 
 		// Undefined (as of HTTP/1.1) method names
-		virtual SendDirective recv_UNKNOWN(QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual Directive recv_UNKNOWN(QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
 
 
 	protected:
 		// Implementation...
-		SendDirective _handle     (QueryID,    nng::msg &&);
-		Directive     pull_recv   (            nng::msg &&request) override;
-		SendDirective request_recv(QueryID id, nng::msg &&request) override;
+		Directive _handle     (QueryID,    nng::msg &&);
+		Directive pull_recv   (            nng::msg &&request) override;
+		Directive request_recv(QueryID id, nng::msg &&request) override;
 
 		std::mutex    reactor_mtx;
 	};

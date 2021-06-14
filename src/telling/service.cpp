@@ -57,16 +57,16 @@ Service_Box::~Service_Box()
 
 
 
-AsyncOp::SendDirective ServiceHandler::asyncSend_msg(nng::msg &&msg)
+Directive ServiceHandler::asyncSend_msg(nng::msg &&msg)
 {
 	if (publishQueue.produce(std::move(msg))) return CONTINUE;
-	return SendDirective(std::move(msg));
+	return std::move(msg);
 }
-AsyncOp::SendDirective ServiceHandler::asyncSend_sent()
+Directive ServiceHandler::asyncSend_sent()
 {
 	auto direct = this->publish_sent();
 
-	if (!direct.sendMsg) switch (direct.directive)
+	if (!direct.msg()) switch (direct)
 	{
 	case DECLINE: case TERMINATE:
 		// Interrupt sending
@@ -82,9 +82,9 @@ AsyncOp::SendDirective ServiceHandler::asyncSend_sent()
 
 
 
-AsyncOp::SendDirective Reactor::_handle(QueryID qid, nng::msg &&msg)
+Directive Reactor::_handle(QueryID qid, nng::msg &&msg)
 {
-	SendDirective result = DECLINE;
+	Directive result = DECLINE;
 
 	MsgView::Request request;
 
@@ -101,7 +101,7 @@ AsyncOp::SendDirective Reactor::_handle(QueryID qid, nng::msg &&msg)
 		result = e.writeReply("Service Event Handler");
 	}
 
-	if (!result.sendMsg)
+	if (!result.msg())
 	{
 		std::lock_guard g(reactor_mtx);
 
@@ -112,10 +112,10 @@ AsyncOp::SendDirective Reactor::_handle(QueryID qid, nng::msg &&msg)
 		case MethodCode::None:    result = DECLINE; break;
 
 			// Safe
-		case MethodCode::GET:    result = qid ? this->recv_get    (qid, request, std::move(msg)) : DECLINE; break;
-		case MethodCode::HEAD:   result = qid ? this->recv_head   (qid, request, std::move(msg)) : DECLINE; break;
-		case MethodCode::OPTIONS:result = qid ? this->recv_options(qid, request, std::move(msg)) : DECLINE; break;
-		case MethodCode::TRACE:  result = qid ? this->recv_trace  (qid, request, std::move(msg)) : DECLINE; break;
+		case MethodCode::GET:    result = qid ? this->recv_get    (qid, request, std::move(msg)) : Directive(DECLINE); break;
+		case MethodCode::HEAD:   result = qid ? this->recv_head   (qid, request, std::move(msg)) : Directive(DECLINE); break;
+		case MethodCode::OPTIONS:result = qid ? this->recv_options(qid, request, std::move(msg)) : Directive(DECLINE); break;
+		case MethodCode::TRACE:  result = qid ? this->recv_trace  (qid, request, std::move(msg)) : Directive(DECLINE); break;
 
 			// Idempotent
 		case MethodCode::PUT:    result = this->recv_put    (qid, request, std::move(msg)); break;
@@ -133,23 +133,23 @@ AsyncOp::SendDirective Reactor::_handle(QueryID qid, nng::msg &&msg)
 	return result;
 }
 
-AsyncOp::Directive Reactor::pull_recv(nng::msg &&msg)
+Directive Reactor::pull_recv(nng::msg &&msg)
 {
 	auto directive = _handle(0, std::move(msg));
 
-	return directive.directive;
+	return directive;
 }
-AsyncOp::SendDirective Reactor::request_recv(QueryID id, nng::msg &&msg)
+Directive Reactor::request_recv(QueryID id, nng::msg &&msg)
 {
 	auto directive = _handle(id, std::move(msg));
 
 	/*
 		TODO:  any more automatic headers?
 	*/
-	if (!directive.sendMsg && directive.directive != TERMINATE)
+	if (!directive.msg() && directive != TERMINATE)
 	{
 		MsgWriter reply;
-		switch (directive.directive)
+		switch (directive)
 		{
 		case AUTO:
 		case CONTINUE:
@@ -169,7 +169,7 @@ AsyncOp::SendDirective Reactor::request_recv(QueryID id, nng::msg &&msg)
 }
 
 
-AsyncOp::SendDirective Reactor::recv_options(QueryID id, const MsgView::Request &req, nng::msg &&msg)
+Directive Reactor::recv_options(QueryID id, const MsgView::Request &req, nng::msg &&msg)
 {
 	auto reply = WriteReply();
 	reply.writeHeader_Allowed(this->allowed());

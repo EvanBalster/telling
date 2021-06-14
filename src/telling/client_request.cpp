@@ -112,16 +112,16 @@ QueryID Req_Async::request(nng::msg &&msg)
 
 		switch (directive)
 		{
-		case AsyncOp::DECLINE:
-		case AsyncOp::TERMINATE:
+		case Directive::DECLINE:
+		case Directive::TERMINATE:
 			idle.push_front(action);
 			action = nullptr;
 			throw nng::exception(nng::error::canceled,
 				"AsyncQuery declined the message.");
 			break;
 
-		case AsyncOp::AUTO:
-		case AsyncOp::CONTINUE:
+		case Directive::AUTO:
+		case Directive::CONTINUE:
 		default:
 			action->state = SEND;
 			active.insert(action);
@@ -142,7 +142,7 @@ void Req_Async::Action::_callback(void *_action)
 	auto comm = action->request;
 	auto delegate = comm->_delegate.lock();
 
-	AsyncOp::DIRECTIVE directive;
+	Directive directive;
 	bool cleanup = false;
 
 	// Errors / callbacks
@@ -152,7 +152,7 @@ void Req_Async::Action::_callback(void *_action)
 		// Terminate communications if delegate is gone
 		if (action->state == RECV && error == nng::error::success)
 			action->aio.release_msg();
-		directive = AsyncOp::TERMINATE;
+		directive = Directive::TERMINATE;
 	}
 	else switch (error)
 	{
@@ -185,7 +185,7 @@ void Req_Async::Action::_callback(void *_action)
 
 
 	// Cleanup conditions...
-	if (directive == AsyncOp::TERMINATE || directive == AsyncOp::DECLINE)
+	if (directive == Directive::TERMINATE || directive == Directive::DECLINE)
 		cleanup = true;
 
 	if (cleanup)

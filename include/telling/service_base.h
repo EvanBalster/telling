@@ -68,10 +68,11 @@ namespace telling
 		public AsyncRespond
 	{
 	public:
-		virtual ~ServiceHandler_Base() {}
+		using Directive = telling::Directive;
+		using QueryID   = telling::QueryID;
 
-		using SendDirective = AsyncOp::SendDirective;
-		using Directive     = AsyncOp::Directive;
+	public:
+		virtual ~ServiceHandler_Base() {}
 	};
 
 
@@ -84,28 +85,25 @@ namespace telling
 	public:
 		virtual ~ServiceHandler() {}
 
-		using SendDirective = AsyncOp::SendDirective;
-		using Directive     = AsyncOp::Directive;
-
 
 	protected:
 		// Receive a pull message.
 		// There is no method for replying.
-		virtual Directive     pull_recv (nng::msg &&request) = 0;
-		virtual Directive     pull_error(nng::error)       {return AUTO;}
+		virtual Directive pull_recv (nng::msg &&request) = 0;
+		virtual Directive pull_error(nng::error)       {return AUTO;}
 
 		// Receive a request.
 		// May respond immediately (return a msg) or later (via respondTo).
-		virtual SendDirective request_recv(QueryID id, nng::msg &&request) = 0;
+		virtual Directive request_recv(QueryID id, nng::msg &&request) = 0;
 
 		// Reply processing status (optional).
 		// reply_error may be also be triggered if there is some error receiving a request.
-		virtual void          reply_sent (QueryID id)                {}
-		virtual Directive     reply_error(QueryID id, nng::error)    {return AUTO;}
+		virtual void      reply_sent (QueryID id)                {}
+		virtual Directive reply_error(QueryID id, nng::error)    {return AUTO;}
 
 		// Publish outbox status (optional)
-		virtual SendDirective publish_sent ()              {return CONTINUE;}
-		virtual SendDirective publish_error(nng::error)    {return AUTO;}
+		virtual Directive publish_sent ()              {return CONTINUE;}
+		virtual Directive publish_error(nng::error)    {return AUTO;}
 
 		// Optionally receive pipe events from the various sockets.
 		virtual void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) {}
@@ -115,17 +113,17 @@ namespace telling
 		SendQueueMtx publishQueue;
 
 		// AsyncRespond impl.
-		SendDirective asyncRespond_recv (QueryID qid, nng::msg &&m)    final    {return this->request_recv(qid, std::move(m));}
-		void          asyncRespond_done (QueryID qid)                  final    {this->reply_sent(qid);}
-		Directive     asyncRespond_error(QueryID qid, nng::error e)    final    {return this->reply_error(qid, e);}
+		Directive asyncRespond_recv (QueryID qid, nng::msg &&m)    final    {return this->request_recv(qid, std::move(m));}
+		void      asyncRespond_done (QueryID qid)                  final    {this->reply_sent(qid);}
+		Directive asyncRespond_error(QueryID qid, nng::error e)    final    {return this->reply_error(qid, e);}
 
 		// AsyncRecv (Pull) impl.
 		Directive asyncRecv_msg  (nng::msg &&msg   ) final    {return this->pull_recv(std::move(msg));}
 		Directive asyncRecv_error(nng::error status) final    {return this->pull_error(status);}
 
 		// AsyncSend (Publish) impl.
-		SendDirective asyncSend_msg  (nng::msg &&msg)    final;
-		SendDirective asyncSend_sent ()                  final;
-		SendDirective asyncSend_error(nng::error status) final    {return this->publish_error(status);}
+		Directive asyncSend_msg  (nng::msg &&msg)    final;
+		Directive asyncSend_sent ()                  final;
+		Directive asyncSend_error(nng::error status) final    {return this->publish_error(status);}
 	};
 }

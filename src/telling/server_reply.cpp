@@ -61,21 +61,21 @@ void Server::Reply::run_device(Reply *reply)
 }
 
 
-AsyncOp::Directive Server::Reply::receive_error(Delegate_Request*, nng::error error)
+Directive Server::Reply::receive_error(Delegate_Request*, nng::error error)
 {
 	server()->log << Name() << ": Request ingestion error: " << nng::to_string(error) << std::endl;
-	return AsyncOp::AUTO;
+	return Directive::AUTO;
 }
-AsyncOp::Directive Server::Reply::receive_error(Delegate_Reply  *, nng::error error)
+Directive Server::Reply::receive_error(Delegate_Reply  *, nng::error error)
 {
 	if (error != nng::error::closed)
 	{
 		server()->log << Name() << ": Reply ingestion error: " << nng::to_string(error) << std::endl;
 	}
-	return AsyncOp::AUTO;
+	return Directive::AUTO;
 }
 
-AsyncOp::Directive Server::Reply::received(const MsgView::Reply &reply, nng::msg &&msg)
+Directive Server::Reply::received(const MsgView::Reply &reply, nng::msg &&msg)
 {
 	// Only one reply will be received at a time so this is thread-safe.
 
@@ -85,18 +85,18 @@ AsyncOp::Directive Server::Reply::received(const MsgView::Reply &reply, nng::msg
 	try
 	{
 		rep_send.send_msg(std::move(msg));
-		return AsyncOp::CONTINUE;
+		return Directive::CONTINUE;
 	}
 	catch (nng::exception e)
 	{
 		server()->log
 			<< Name() << ": could not enqueue reply to client" << std::endl
 			<< "\t" << e.what() << std::endl;
-		return AsyncOp::DECLINE;
+		return Directive::DECLINE;
 	}
 }
 
-AsyncOp::Directive Server::Reply::received(const MsgView::Request &request, nng::msg &&msg)
+Directive Server::Reply::received(const MsgView::Request &request, nng::msg &&msg)
 {
 	auto server = this->server();
 
@@ -106,7 +106,7 @@ AsyncOp::Directive Server::Reply::received(const MsgView::Request &request, nng:
 
 	if (status.isSuccessful())
 	{
-		return AsyncOp::CONTINUE;
+		return Directive::CONTINUE;
 	}
 	else
 	{
@@ -138,6 +138,6 @@ AsyncOp::Directive Server::Reply::received(const MsgView::Request &request, nng:
 
 		delegate_reply->asyncRecv_msg(writer.release());
 
-		return AsyncOp::DECLINE;
+		return Directive::DECLINE;
 	}
 }

@@ -27,13 +27,13 @@ namespace telling
 		AsyncSendQueue() {}
 		~AsyncSendQueue() override {}
 
-		SendDirective asyncSend_msg(nng::msg &&msg) override
+		Directive asyncSend_msg(nng::msg &&msg) override
 		{
 			if (SendQueueMtx::produce(std::move(msg))) return CONTINUE;
-			else return SendDirective(std::move(msg));
+			else return std::move(msg);
 		}
 
-		SendDirective asyncSend_sent() override
+		Directive asyncSend_sent() override
 		{
 			nng::msg next;
 			if (SendQueueMtx::consume(next)) return next;

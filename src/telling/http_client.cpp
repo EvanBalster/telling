@@ -117,21 +117,21 @@ QueryID HttpClient_Async::request(nng::msg &&req)
 
 		auto handler = _handler.lock();
 
-		AsyncOp::Directive directive =
-			(handler ? handler->httpQuery_made(action->queryID, req) : AsyncOp::Directive(AsyncOp::TERMINATE));
+		Directive directive =
+			(handler ? handler->httpQuery_made(action->queryID, req) : Directive(Directive::TERMINATE));
 
 		switch (directive)
 		{
-		case AsyncOp::DECLINE:
-		case AsyncOp::TERMINATE:
+		case Directive::DECLINE:
+		case Directive::TERMINATE:
 			idle.push_front(action);
 			action = nullptr;
 			throw nng::exception(nng::error::canceled,
 				"AsyncQuery declined the message.");
 			break;
 
-		case AsyncOp::AUTO:
-		case AsyncOp::CONTINUE:
+		case Directive::AUTO:
+		case Directive::CONTINUE:
 		default:
 			action->state = CONNECT;
 			active.insert(action);
@@ -152,14 +152,14 @@ void HttpClient_Async::Action::_callback(void *_action)
 	auto client = action->client;
 	auto handler = client->_handler.lock();
 
-	AsyncOp::DIRECTIVE directive;
+	Directive directive;
 	bool cleanup = false;
 
 	// Callbacks / Errors?
 	auto error = action->aio.result();
 	if (!handler)
 	{
-		directive = AsyncOp::TERMINATE;
+		directive = Directive::TERMINATE;
 	}
 	else switch (error)
 	{
@@ -169,7 +169,7 @@ void HttpClient_Async::Action::_callback(void *_action)
 		case CONNECT:
 			action->conn = nng::http::conn(action->aio.get_output<nng_http_conn>(0));
 			handler->httpConn_open(action->conn);
-			directive = AsyncOp::CONTINUE;
+			directive = Directive::CONTINUE;
 			break;
 		case SEND:
 			// Send
@@ -200,7 +200,7 @@ void HttpClient_Async::Action::_callback(void *_action)
 
 
 	// Cleanup conditions...
-	if (directive == AsyncOp::TERMINATE || directive == AsyncOp::DECLINE)
+	if (directive == Directive::TERMINATE || directive == Directive::DECLINE)
 		cleanup = true;
 
 	if (cleanup)

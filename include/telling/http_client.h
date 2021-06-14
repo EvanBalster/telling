@@ -13,7 +13,7 @@
 #include <nngpp/transport/tls/config.h>
 #include <nngpp/url.h>
 
-#include "async_query.h"
+#include "async.h"
 #include "host_address.h"
 
 
@@ -54,7 +54,7 @@ namespace telling
 	public:
 		using conn_view = nng::http::conn_view;
 
-		class Handler : public AsyncOp
+		class Handler : public AsyncEnums
 		{
 		public:
 			virtual ~Handler() {}

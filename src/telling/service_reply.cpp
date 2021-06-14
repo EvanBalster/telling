@@ -47,7 +47,7 @@ void Rep_Async::_aioReceived(void *_comm)
 	auto queryID = ctx.get().id;
 	auto delegate = comm->_delegate.lock();
 
-	AsyncOp::DIRECTIVE directive = AsyncOp::TERMINATE;
+	Directive directive = Directive::TERMINATE;
 
 	bool await_delayed_response = false;
 
@@ -57,20 +57,20 @@ void Rep_Async::_aioReceived(void *_comm)
 	{
 		// No delegate; terminate
 		comm->aio_recv.release_msg();
-		directive = AsyncOp::TERMINATE;
+		directive = Directive::TERMINATE;
 	}
 	else switch (error)
 	{
 	case nng::error::success:
 		{
-			AsyncOp::SendDirective react = delegate->asyncRespond_recv(
+			Directive react = delegate->asyncRespond_recv(
 				queryID, std::move(comm->aio_recv.release_msg()));
-			directive = react.directive;
+			directive = react.directive();
 
-			if (react.sendMsg)
+			if (react.msg())
 			{
 				// Immediate response
-				comm->respondTo(queryID, std::move(react.sendMsg));
+				comm->respondTo(queryID, react.release_msg());
 
 				// Dispose of context
 				ctx = nng::ctx();
@@ -94,16 +94,16 @@ void Rep_Async::_aioReceived(void *_comm)
 	switch (directive)
 	{
 	default:
-	case AsyncOp::AUTO:
+	case Directive::AUTO:
 		if (error != nng::error::success)
 		{
-		case AsyncOp::TERMINATE:
+		case Directive::TERMINATE:
 			// Stop receiving messages
 			return;
 		}
 
 		[[fallthrough]];
-	case AsyncOp::CONTINUE:
+	case Directive::CONTINUE:
 		if (await_delayed_response)
 		{
 			// Evil pickling
@@ -113,7 +113,7 @@ void Rep_Async::_aioReceived(void *_comm)
 		}
 
 		[[fallthrough]];
-	case AsyncOp::DECLINE:
+	case Directive::DECLINE:
 		// Receive another message with a fresh context
 		ctx = nng::make_ctx(comm->socketView());
 		ctx.recv(comm->aio_recv);
@@ -200,7 +200,7 @@ public:
 	Delegate() {}
 	~Delegate() {}
 
-	SendDirective asyncRespond_recv(QueryID qid, nng::msg &&query) final
+	Directive asyncRespond_recv(QueryID qid, nng::msg &&query) final
 	{
 		inbox.push(Pending{qid, std::move(query)});
 		return CONTINUE;

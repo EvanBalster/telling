@@ -18,13 +18,13 @@ Server::Pull::~Pull()
 }
 
 
-AsyncOp::Directive Server::Pull::receive_error(Delegate_Pull  *, nng::error error)
+Directive Server::Pull::receive_error(Delegate_Pull  *, nng::error error)
 {
 	server()->log << Name() << ": ingestion error: " << nng::to_string(error) << std::endl;
-	return AsyncOp::AUTO;
+	return Directive::AUTO;
 }
 
-AsyncOp::Directive Server::Pull::received(const MsgView::Request &request, nng::msg &&msg)
+Directive Server::Pull::received(const MsgView::Request &request, nng::msg &&msg)
 {
 	auto server = this->server();
 
@@ -34,7 +34,7 @@ AsyncOp::Directive Server::Pull::received(const MsgView::Request &request, nng::
 
 	if (status.isSuccessful())
 	{
-		return AsyncOp::CONTINUE;
+		return Directive::CONTINUE;
 	}
 	else
 	{
@@ -43,6 +43,6 @@ AsyncOp::Directive Server::Pull::received(const MsgView::Request &request, nng::
 			<< ") routing to `" << request.uri() << "`" << std::endl;
 
 		// There's no opportunity to reply, so the failed message is discarded.
-		return AsyncOp::DECLINE;
+		return Directive::DECLINE;
 	}
 }

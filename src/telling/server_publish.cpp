@@ -15,7 +15,7 @@ Server::Publish::Publish() :
 	// The subscriber is a relay, and accepts all topics.
 	subscribe.subscribe("");
 
-	// Relay service events to internal modules (dial-in mechanism)
+	// Relay service events to internal modules (dial-in mvechanism)
 	subscribe.listen(server->address_internal);
 }
 Server::Publish::~Publish()
@@ -27,13 +27,13 @@ Server::Publish::~Publish()
 }
 
 
-AsyncOp::Directive Server::Publish::receive_error(Delegate_Sub  *, nng::error error)
+Directive Server::Publish::receive_error(Delegate_Sub  *, nng::error error)
 {
 	server()->log << Name() << ": ingestion error: " << nng::to_string(error) << std::endl;
-	return AsyncOp::AUTO;
+	return Directive::AUTO;
 }
 
-AsyncOp::Directive Server::Publish::received(const MsgView::Bulletin &bulletin, nng::msg &&msg)
+Directive Server::Publish::received(const MsgView::Bulletin &bulletin, nng::msg &&msg)
 {
 	// No mutex needed; this AIO is the only sender.
 
@@ -45,5 +45,5 @@ AsyncOp::Directive Server::Publish::received(const MsgView::Bulletin &bulletin, 
 	// Publish the message!
 	publish.publish(std::move(msg));
 
-	return AsyncOp::CONTINUE;
+	return Directive::CONTINUE;
 }

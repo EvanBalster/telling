@@ -131,8 +131,8 @@ namespace telling
 			service::Publish_Box    publish;
 
 			friend class Delegate_Sub;
-			AsyncOp::Directive received(const MsgView::Bulletin&, nng::msg&&);
-			AsyncOp::Directive receive_error(Delegate_Sub*, nng::error);
+			Directive received(const MsgView::Bulletin&, nng::msg&&);
+			Directive receive_error(Delegate_Sub*, nng::error);
 		}
 			publish;
 		
@@ -156,8 +156,8 @@ namespace telling
 			service::Pull_Async pull;
 
 			friend class Delegate_Pull;
-			AsyncOp::Directive received(const MsgView::Request&, nng::msg&&);
-			AsyncOp::Directive receive_error(Delegate_Pull*, nng::error);
+			Directive received(const MsgView::Request&, nng::msg&&);
+			Directive receive_error(Delegate_Pull*, nng::error);
 		}
 			pull;
 
@@ -200,11 +200,11 @@ namespace telling
 
 			friend class Delegate_Reply;
 			friend class Delegate_Request;
-			AsyncOp::Directive received(const MsgView::Reply&,   nng::msg&&);
-			AsyncOp::Directive received(const MsgView::Request&, nng::msg&&);
+			Directive received(const MsgView::Reply&,   nng::msg&&);
+			Directive received(const MsgView::Request&, nng::msg&&);
 
-			AsyncOp::Directive receive_error(Delegate_Request*, nng::error);
-			AsyncOp::Directive receive_error(Delegate_Reply  *, nng::error);
+			Directive receive_error(Delegate_Request*, nng::error);
+			Directive receive_error(Delegate_Reply  *, nng::error);
 
 
 		private:
@@ -346,7 +346,7 @@ namespace telling
 
 			std::unordered_map<PipeID, std::string> registrationMap;
 
-			AsyncOp::SendDirective registerRequest(QueryID, nng::msg &&);
+			Directive registerRequest(QueryID, nng::msg &&);
 			void                   registerExpired(nng::pipe_view);
 
 			service::Publish_Box publish_events;
@@ -383,14 +383,14 @@ namespace telling
 
 
 	template<typename Module, typename MsgViewType>
-	AsyncOp::Directive Server::DelegateRecv<Module, MsgViewType>::asyncRecv_msg(nng::msg &&_msg)
+	Directive Server::DelegateRecv<Module, MsgViewType>::asyncRecv_msg(nng::msg &&_msg)
 	{
 		// Lock out other receives and stop().
 		std::lock_guard<std::mutex> g(mtx);
 
 		if (!module)
 		{
-			return AsyncOp::TERMINATE;
+			return TERMINATE;
 		}
 
 		// Retain message.
@@ -410,16 +410,16 @@ namespace telling
 			log << Module::Name() << ": message exception: " << e.what() << std::endl;
 		}
 
-		return AsyncOp::DECLINE;
+		return DECLINE;
 	}
 
 	template<typename Module, typename MsgViewType>
-	AsyncOp::Directive Server::DelegateRecv<Module, MsgViewType>::asyncRecv_error(nng::error error)
+	Directive Server::DelegateRecv<Module, MsgViewType>::asyncRecv_error(nng::error error)
 	{
 		// Lock out other receives and stop().
 		std::lock_guard<std::mutex> g(mtx);
 
-		if (!module) return AsyncOp::TERMINATE;
+		if (!module) return TERMINATE;
 
 		return module->receive_error(this, error);
 	}

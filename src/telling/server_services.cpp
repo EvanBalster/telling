@@ -16,7 +16,7 @@ public:
 	RegisterResponder(Services *_services) : services(_services) {}
 
 
-	SendDirective asyncRespond_recv(QueryID qid, nng::msg &&query)  final
+	Directive asyncRespond_recv(QueryID qid, nng::msg &&query)  final
 	{
 		std::lock_guard gSelf(mtx);
 		if (!services) return TERMINATE;
@@ -37,7 +37,7 @@ public:
 
 		services->server()->log << services->Name()
 			<< ": Registration Responder error: " << nng::to_string(status) << std::endl;
-		return AsyncOp::AUTO;
+		return AUTO;
 	}
 
 	void pipeEvent(Socket *socket, nng::pipe_view pipe, nng::pipe_ev event) final
@@ -94,7 +94,7 @@ Server::Services::~Services()
 	management.thread.join();
 }
 
-AsyncOp::SendDirective Server::Services::registerRequest(QueryID queryID, nng::msg &&_msg)
+Directive Server::Services::registerRequest(QueryID queryID, nng::msg &&_msg)
 {
 	auto server = this->server();
 	auto &log = server->log;
@@ -121,7 +121,7 @@ AsyncOp::SendDirective Server::Services::registerRequest(QueryID queryID, nng::m
 	{
 		// Don't understand this message
 		log << Name() << ": did not recognize URI `" << msg.uri() << "`" << endl;
-		return AsyncOp::DECLINE;
+		return Directive::DECLINE;
 	}
 
 	/*
@@ -167,7 +167,7 @@ AsyncOp::SendDirective Server::Services::registerRequest(QueryID queryID, nng::m
 	management.route_open.emplace_back(NewRoute{queryID, pipeID, std::string(pathPrefix), baseAddress});
 	management.cond.notify_one();
 
-	return AsyncOp::CONTINUE;
+	return Directive::CONTINUE;
 }
 
 void Server::Services::registerExpired(nng::pipe_view pipe)

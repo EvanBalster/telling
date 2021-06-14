@@ -101,10 +101,6 @@ namespace telling
 	class Client_Async : public Client_Base
 	{
 	public:
-		using SendDirective = AsyncOp::SendDirective;
-		using Directive     = AsyncOp::Directive;
-
-
 		/*
 			Asynchronous events are delivered to a delegate object.
 		*/
@@ -116,28 +112,28 @@ namespace telling
 		public:
 			virtual ~Handler() {}
 
-			using SendDirective = AsyncOp::SendDirective;
-			using Directive     = AsyncOp::Directive;
+			using Directive = telling::Directive;
+			using QueryID   = telling::QueryID;
 
 
 		protected:
 			// Receive a subscribe message.
 			// There is no method for replying.
-			virtual Directive     subscribe_recv (nng::msg &&bulletin) = 0;
-			virtual Directive     subscribe_error(nng::error)         {return AUTO;}
+			virtual Directive subscribe_recv (nng::msg &&bulletin) = 0;
+			virtual Directive subscribe_error(nng::error)         {return AUTO;}
 
 			// Receive a reply to some earlier request.
-			virtual Directive     reply_recv   (QueryID id, nng::msg &&reply) = 0;
+			virtual Directive reply_recv   (QueryID id, nng::msg &&reply) = 0;
 
 			// Request processing status (optional).
 			// request_error may be also be triggered if there is some error sending a request.
-			virtual Directive     request_made (QueryID id, const nng::msg &request)    {return CONTINUE;}
-			virtual Directive     request_sent (QueryID id)                             {return CONTINUE;}
-			virtual Directive     request_error(QueryID id, nng::error)                 {return AUTO;}
+			virtual Directive request_made (QueryID id, const nng::msg &request)    {return CONTINUE;}
+			virtual Directive request_sent (QueryID id)                             {return CONTINUE;}
+			virtual Directive request_error(QueryID id, nng::error)                 {return AUTO;}
 
 			// Push outbox status (optional)
-			virtual SendDirective push_sent ()              {return CONTINUE;}
-			virtual SendDirective push_error(nng::error)    {return AUTO;}
+			virtual Directive push_sent ()              {return CONTINUE;}
+			virtual Directive push_error(nng::error)    {return AUTO;}
 
 			// Optionally receive pipe events from the various sockets.
 			virtual void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) {}
@@ -157,9 +153,9 @@ namespace telling
 			Directive asyncRecv_error(nng::error status) final    {return this->subscribe_error(status);}
 
 			// AsyncSend (Publish) impl.
-			SendDirective asyncSend_msg  (nng::msg &&msg)    final;
-			SendDirective asyncSend_sent ()                  final;
-			SendDirective asyncSend_error(nng::error status) final    {return this->push_error(status);}
+			Directive asyncSend_msg  (nng::msg &&msg)    final;
+			Directive asyncSend_sent ()                  final;
+			Directive asyncSend_error(nng::error status) final    {return this->push_error(status);}
 		};
 
 

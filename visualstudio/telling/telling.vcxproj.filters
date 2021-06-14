@@ -87,9 +87,6 @@
     <ClInclude Include="..\..\include\telling\io_queue.h">
       <Filter>common</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\include\telling\async_query.h">
-      <Filter>common</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\include\telling\service_registration.h">
       <Filter>service</Filter>
     </ClInclude>
