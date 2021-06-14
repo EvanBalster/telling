@@ -83,6 +83,8 @@ namespace telling
 	/*
 		Callback interface for receiving messages.
 			Used for PULL and SUBscribe protocols.
+			Tag is provided as a parameter to all methods of this interface.
+			Tag can be used to distinguish between protocols or callers.
 	*/
 	class AsyncRecv : public AsyncEnums
 	{
@@ -112,11 +114,11 @@ namespace telling
 			Optional base class for AIO receiver that calls an AsyncRecv object.
 		*/
 		template<class T_RecvCtx>
-		class Operator
+		class Cycle_
 		{
 		public:
-			Operator(T_RecvCtx &&_ctx);
-			~Operator();
+			Cycle_(T_RecvCtx &&_ctx);
+			~Cycle_();
 
 			// Start/stop receiving.  Start may throw exceptions on failure.
 			void recv_start(std::weak_ptr<AsyncRecv> _delegate);
@@ -132,6 +134,9 @@ namespace telling
 			T_RecvCtx                _recv_ctx;
 			std::weak_ptr<AsyncRecv> _recv_delegate;
 		};
+
+		using Cycle    = Cycle_<nng::socket_view>;
+		using CtxCycle = Cycle_<nng::ctx>;
 	};
 
 	/*
@@ -165,11 +170,11 @@ namespace telling
 			Optional base class for AIO sender that calls an AsyncSend object.
 		*/
 		template<class T_SendCtx>
-		class Operator
+		class Cycle_
 		{
 		public:
-			Operator(T_SendCtx &&_ctx);
-			~Operator();
+			Cycle_(T_SendCtx &&_ctx);
+			~Cycle_();
 
 			/*
 				send_msg may throw an exception if the delegate refuses.
@@ -189,6 +194,9 @@ namespace telling
 			T_SendCtx                _send_ctx;
 			std::weak_ptr<AsyncSend> _send_delegate;
 		};
+
+		using Cycle    = Cycle_<nng::socket_view>;
+		using CtxCycle = Cycle_<nng::ctx>;
 	};
 
 
@@ -354,23 +362,23 @@ namespace telling
 
 
 	template<typename T_RecvCtx>
-	AsyncRecv::Operator<T_RecvCtx>::Operator(T_RecvCtx &&_ctx) :
+	AsyncRecv::Cycle_<T_RecvCtx>::Cycle_(T_RecvCtx &&_ctx) :
 		_recv_ctx(std::move(_ctx))
 	{
 		detail::AsyncRecv_Setup<
-			&Operator::_recv_aio,
-			&Operator::_recv_ctx,
-			&Operator::_recv_delegate>
+			&Cycle_::_recv_aio,
+			&Cycle_::_recv_ctx,
+			&Cycle_::_recv_delegate>
 			(this);
 	}
 	template<typename T_RecvCtx>
-	AsyncRecv::Operator<T_RecvCtx>::~Operator()
+	AsyncRecv::Cycle_<T_RecvCtx>::~Cycle_()
 	{
 		recv_stop();
 	}
 
 	template<typename T_RecvCtx>
-	void AsyncRecv::Operator<T_RecvCtx>::recv_start(std::weak_ptr<AsyncRecv> _delegate)
+	void AsyncRecv::Cycle_<T_RecvCtx>::recv_start(std::weak_ptr<AsyncRecv> _delegate)
 	{
 		if (_recv_delegate.lock())
 			throw nng::exception(nng::error::busy, "Receive start: already started");
@@ -383,7 +391,7 @@ namespace telling
 		}
 	}
 	template<typename T_RecvCtx>
-	void AsyncRecv::Operator<T_RecvCtx>::recv_stop() noexcept
+	void AsyncRecv::Cycle_<T_RecvCtx>::recv_stop() noexcept
 	{
 		_recv_aio.stop();
 		if (auto delegate = _recv_delegate.lock())
@@ -392,17 +400,17 @@ namespace telling
 
 
 	template<typename T_SendCtx>
-	AsyncSend::Operator<T_SendCtx>::Operator(T_SendCtx &&_ctx) :
+	AsyncSend::Cycle_<T_SendCtx>::Cycle_(T_SendCtx &&_ctx) :
 		_send_ctx(_ctx)
 	{
 		detail::AsyncSend_Setup<
-			&Operator::_send_aio,
-			&Operator::_send_ctx,
-			&Operator::_send_delegate>
+			&Cycle_::_send_aio,
+			&Cycle_::_send_ctx,
+			&Cycle_::_send_delegate>
 			(this);
 	}
 	template<typename T_SendCtx>
-	AsyncSend::Operator<T_SendCtx>::~Operator()
+	AsyncSend::Cycle_<T_SendCtx>::~Cycle_()
 	{
 		_send_aio.stop();
 		if (auto delegate = _send_delegate.lock())
@@ -410,7 +418,7 @@ namespace telling
 	}
 
 	template<typename T_SendCtx>
-	void AsyncSend::Operator<T_SendCtx>::send_init(std::weak_ptr<AsyncSend> _delegate)
+	void AsyncSend::Cycle_<T_SendCtx>::send_init(std::weak_ptr<AsyncSend> _delegate)
 	{
 		if (_send_delegate.lock())
 			throw nng::exception(nng::error::busy, "Send start: already started");
@@ -422,7 +430,7 @@ namespace telling
 	}
 
 	template<typename T_SendCtx>
-	void AsyncSend::Operator<T_SendCtx>::send_msg(nng::msg &&msg)
+	void AsyncSend::Cycle_<T_SendCtx>::send_msg(nng::msg &&msg)
 	{
 		auto delegate = _send_delegate.lock();
 
@@ -456,7 +464,7 @@ namespace telling
 		}
 	}
 	template<typename T_SendCtx>
-	void AsyncSend::Operator<T_SendCtx>::send_stop() noexcept
+	void AsyncSend::Cycle_<T_SendCtx>::send_stop() noexcept
 	{
 		_send_aio.stop();
 	}

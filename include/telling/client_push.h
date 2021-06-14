@@ -22,20 +22,20 @@ namespace telling
 		*/
 		class Push_Async :
 			public    Push_Base,
-			protected AsyncSend::Operator<nng::socket_view>
+			protected AsyncSend::Cycle
 		{
 		public:
 			/*
 				Construct with an AsyncSend delegate.
 			*/
-			Push_Async(std::weak_ptr<AsyncSend> p = {})                                   : Push_Base(),            Operator(socketView()) {initialize(p);}
-			Push_Async(const Push_Base &shareSocket, std::weak_ptr<AsyncSend> p = {})     : Push_Base(shareSocket), Operator(socketView()) {initialize(p);}
+			Push_Async(std::weak_ptr<AsyncSend> p = {})                                   : Push_Base(),            Cycle_(socketView()) {initialize(p);}
+			Push_Async(const Push_Base &shareSocket, std::weak_ptr<AsyncSend> p = {})     : Push_Base(shareSocket), Cycle_(socketView()) {initialize(p);}
 			~Push_Async() {}
 
 			/*
 				Initialize with the provided delegate
 			*/
-			void initialize(std::weak_ptr<AsyncSend> p)    {Operator::send_init(p);}
+			void initialize(std::weak_ptr<AsyncSend> p)    {Cycle_::send_init(p);}
 
 			/*
 				Attempt to push a message.

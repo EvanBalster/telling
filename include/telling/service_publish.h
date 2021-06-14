@@ -28,20 +28,20 @@ namespace telling
 		*/
 		class Pub_Async :
 			public    Pub_Base,
-			protected AsyncSend::Operator<nng::socket_view>
+			protected AsyncSend::Cycle
 		{
 		public:
 			/*
 				Construct with an AsyncSend delegate.
 			*/
-			Pub_Async(std::weak_ptr<AsyncSend> p = {})                                  : Pub_Base(),            Operator(socketView()) {initialize(p);}
-			Pub_Async(const Pub_Base &shareSocket, std::weak_ptr<AsyncSend> p = {})     : Pub_Base(shareSocket), Operator(socketView()) {initialize(p);}
+			Pub_Async(std::weak_ptr<AsyncSend> p = {})                                  : Pub_Base(),            Cycle_(socketView()) {initialize(p);}
+			Pub_Async(const Pub_Base &shareSocket, std::weak_ptr<AsyncSend> p = {})     : Pub_Base(shareSocket), Cycle_(socketView()) {initialize(p);}
 			~Pub_Async() {}
 
 			/*
 				Initialize with the provided delegate
 			*/
-			void initialize(std::weak_ptr<AsyncSend> p)    {Operator::send_init(p);}
+			void initialize(std::weak_ptr<AsyncSend> p)    {Cycle_::send_init(p);}
 
 			/*
 				Attempt to push a message.  Throws nng::exception on failure.

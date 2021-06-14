@@ -195,8 +195,8 @@ namespace telling
 
 			// I/O handling for replies
 			std::shared_ptr<AsyncSendQueue>       rep_sendQueue;
-			AsyncSend::Operator<nng::socket_view> rep_send;
-			AsyncRecv::Operator<nng::socket_view> rep_recv;
+			AsyncSend::Cycle rep_send;
+			AsyncRecv::Cycle rep_recv;
 
 			friend class Delegate_Reply;
 			friend class Delegate_Request;
@@ -253,8 +253,8 @@ namespace telling
 
 			// I/O handling for requests
 			std::shared_ptr<AsyncSendQueue>       req_sendQueue;
-			AsyncSend::Operator<nng::socket_view> req_send;
-			AsyncRecv::Operator<nng::socket_view> req_recv;
+			AsyncSend::Cycle req_send;
+			AsyncRecv::Cycle req_recv;
 
 			std::mutex mtx;
 			bool halted = false;

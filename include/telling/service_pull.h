@@ -22,21 +22,21 @@ namespace telling
 		*/
 		class Pull_Async :
 			public    Pull_Base,
-			protected AsyncRecv::Operator<nng::socket_view>
+			protected AsyncRecv::Cycle
 		{
 		public:
 			/*
 				Construct with an AsyncRecv delegate.
 					Begins listening for messages immediately.
 			*/
-			Pull_Async(std::weak_ptr<AsyncRecv> p = {})                                   : Pull_Base(),            Operator(socketView()) {initialize(p);}
-			Pull_Async(const Pull_Base &shareSocket, std::weak_ptr<AsyncRecv> p = {})     : Pull_Base(shareSocket), Operator(socketView()) {initialize(p);}
+			Pull_Async(std::weak_ptr<AsyncRecv> p = {})                                   : Pull_Base(),            Cycle_(socketView()) {initialize(p);}
+			Pull_Async(const Pull_Base &shareSocket, std::weak_ptr<AsyncRecv> p = {})     : Pull_Base(shareSocket), Cycle_(socketView()) {initialize(p);}
 			~Pull_Async() {}
 
 			/*
 				Start receiving through the provided delegate.
 			*/
-			void initialize(std::weak_ptr<AsyncRecv> p)    {Operator::recv_start(p);}
+			void initialize(std::weak_ptr<AsyncRecv> p)    {Cycle_::recv_start(p);}
 		};
 
 

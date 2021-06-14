@@ -42,21 +42,21 @@ namespace telling
 		*/
 		class Sub_Async :
 			public    Sub_Base,
-			protected AsyncRecv::Operator<nng::ctx>
+			protected AsyncRecv::Cycle_<nng::ctx>
 		{
 		public:
 			/*
 				Construct with an AsyncRecv delegate.
 					Begins listening for messages immediately.
 			*/
-			Sub_Async(std::weak_ptr<AsyncRecv> p = {})                                  : Sub_Base(),            Operator(make_ctx()) {initialize(p);}
-			Sub_Async(const Sub_Base &shareSocket, std::weak_ptr<AsyncRecv> p = {})     : Sub_Base(shareSocket), Operator(make_ctx()) {initialize(p);}
+			Sub_Async(std::weak_ptr<AsyncRecv> p = {})                                  : Sub_Base(),            Cycle_(make_ctx()) {initialize(p);}
+			Sub_Async(const Sub_Base &shareSocket, std::weak_ptr<AsyncRecv> p = {})     : Sub_Base(shareSocket), Cycle_(make_ctx()) {initialize(p);}
 			~Sub_Async() {}
 
 			/*
 				Start receiving through the provided delegate.
 			*/
-			void initialize(std::weak_ptr<AsyncRecv> p)    {Operator::recv_start(p);}
+			void initialize(std::weak_ptr<AsyncRecv> p)    {Cycle_::recv_start(p);}
 
 			/*
 				Manage subscriptions.
