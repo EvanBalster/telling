@@ -7,63 +7,11 @@ using namespace telling;
 using std::endl;
 
 
-class Server::Services::RegisterResponder : public AsyncRespond, public Socket::PipeEventHandler
+Server::Services::Services()
 {
-public:
-	std::mutex mtx;
-	Services *services;
+	register_reply.initialize(get_weak());
 
-	RegisterResponder(Services *_services) : services(_services) {}
-
-
-	Directive asyncRespond_recv(QueryID qid, nng::msg &&query)  final
-	{
-		std::lock_guard gSelf(mtx);
-		if (!services) return TERMINATE;
-
-		return services->registerRequest(qid, std::move(query));
-	}
-	void asyncRespond_done(QueryID qid) final
-	{
-		std::lock_guard gSelf(mtx);
-		if (!services) return;
-
-		//std::lock_guard g(services->mtx);
-	}
-	Directive asyncRespond_error(QueryID qid, nng::error status) final
-	{
-		std::lock_guard gSelf(mtx);
-		if (!services) return TERMINATE;
-
-		services->server()->log << services->Name()
-			<< ": Registration Responder error: " << nng::to_string(status) << std::endl;
-		return AUTO;
-	}
-
-	void pipeEvent(Socket *socket, nng::pipe_view pipe, nng::pipe_ev event) final
-	{
-		std::lock_guard gSelf(mtx);
-		if (!services) return;
-
-		if (event == nng::pipe_ev::rem_post)
-		{
-			services->registerExpired(pipe);
-		}
-	}
-
-	void stop()
-	{
-		std::lock_guard gSelf(mtx);
-		services = nullptr;
-	}
-};
-
-
-Server::Services::Services() :
-	register_responder(std::make_shared<RegisterResponder>(this)),
-	register_reply(register_responder)
-{
-	register_reply.socket()->setPipeHandler(register_responder);
+	register_reply.socket()->setPipeHandler(get_weak());
 
 	map.burst_threshold(256);
 
@@ -82,7 +30,8 @@ Server::Services::Services() :
 
 Server::Services::~Services()
 {
-	if (register_responder) static_cast<RegisterResponder*>(&*register_responder)->stop();
+	// Stop asynchronous work
+	async_lifetime.destroy();
 
 	{
 		// Shut down management thread
@@ -94,10 +43,22 @@ Server::Services::~Services()
 	management.thread.join();
 }
 
-Directive Server::Services::registerRequest(QueryID queryID, nng::msg &&_msg)
+
+void Server::Services::async_sent(Replying rep)
+{
+}
+void Server::Services::async_error(Replying rep, AsyncError status)
+{
+	server()->log << Name()
+		<< ": Registration Responder error: " << nng::to_string(status) << std::endl;
+}
+
+void Server::Services::async_recv(Replying rep, nng::msg &&_msg)
 {
 	auto server = this->server();
 	auto &log = server->log;
+
+	auto queryID = rep.id;
 
 
 	nng::msg owned_msg = std::move(_msg);
@@ -110,7 +71,8 @@ Directive Server::Services::registerRequest(QueryID queryID, nng::msg &&_msg)
 	{
 		log << Name() << ": message parse exception: " << e.what() << std::endl;
 
-		return e.writeReply("Service Registration Request Handler");
+		rep.send(e.writeReply("Service Registration Request Handler"));
+		return;
 	}
 
 	/*
@@ -121,7 +83,6 @@ Directive Server::Services::registerRequest(QueryID queryID, nng::msg &&_msg)
 	{
 		// Don't understand this message
 		log << Name() << ": did not recognize URI `" << msg.uri() << "`" << endl;
-		return Directive::DECLINE;
 	}
 
 	/*
@@ -149,7 +110,8 @@ Directive Server::Services::registerRequest(QueryID queryID, nng::msg &&_msg)
 
 		auto writer = WriteReply(HttpStatus::Code::BadRequest);
 		writer.writeData("Malformed Registration Request Body.");
-		return writer.release();
+		rep.send(writer.release());
+		return;
 	}
 
 
@@ -166,12 +128,16 @@ Directive Server::Services::registerRequest(QueryID queryID, nng::msg &&_msg)
 
 	management.route_open.emplace_back(NewRoute{queryID, pipeID, std::string(pathPrefix), baseAddress});
 	management.cond.notify_one();
-
-	return Directive::CONTINUE;
 }
 
-void Server::Services::registerExpired(nng::pipe_view pipe)
+void Server::Services::pipeEvent(Socket *socket, nng::pipe_view pipe, nng::pipe_ev event)
 {
+	if (event != nng::pipe_ev::rem_post)
+	{
+		// We are only interested in "disconnect" events for now.
+		return;
+	}
+	
 	auto server = this->server();
 	auto &log = server->log;
 
@@ -322,11 +288,13 @@ void Server::Services::run_management_thread()
 Server::Route::Route(Server &_server, std::string _path) :
 	server(_server), path(_path),
 	req(*this),
-	req_send(req.socketView()),
-	req_recv(req.socketView())
+	req_send_to_service  (req.socketView(), ClientRequesting{}),
+	req_recv_from_service(req.socketView(), ServiceReplying{})
 {
-	req_send.send_init(req_sendQueue = std::make_shared<AsyncSendQueue>());
-	req_recv.recv_start(server.reply.reply_handler());
+	req_send_to_service.send_init(req_sendQueue.get_weak());
+
+	// Route replies from services
+	req_recv_from_service.recv_start(server.reply.get_weak());
 }
 Server::Route::~Route()
 {
@@ -339,8 +307,8 @@ Server::Route::~Route()
 	req.close();
 	push.close();
 
-	req_send.send_stop();
-	req_recv.recv_stop();
+	req_send_to_service.send_stop();
+	req_recv_from_service.recv_stop();
 }
 
 void Server::Route::dial(const HostAddress::Base &base)
@@ -357,5 +325,5 @@ void Server::Route::sendPush   (nng::msg &&msg)
 void Server::Route::sendRequest(nng::msg &&msg) 
 {
 	std::lock_guard<std::mutex> g(mtx);
-	req_send.send_msg(std::move(msg));
+	req_send_to_service.send_msg(std::move(msg));
 }

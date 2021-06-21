@@ -3,17 +3,16 @@
 
 
 using namespace telling;
-using namespace telling::service;
 
 
 /*
 	Reply implementation
 */
 
-void Rep_Async::initialize(std::weak_ptr<AsyncRespond> delegate)
+void Reply::initialize(std::weak_ptr<AsyncReply> delegate)
 {
 	if (_delegate.lock())
-		throw nng::exception(nng::error::busy, "Request_Async::initialize (already initialized)");
+		throw nng::exception(nng::error::busy, "Request::initialize (already initialized)");
 
 	if (delegate.lock())
 	{
@@ -26,7 +25,7 @@ void Rep_Async::initialize(std::weak_ptr<AsyncRespond> delegate)
 		ctx_aio_recv.recv(aio_recv);
 	}
 }
-Rep_Async::~Rep_Async()
+Reply::~Reply()
 {
 	for (auto id : unresponded)
 	{
@@ -40,16 +39,14 @@ Rep_Async::~Rep_Async()
 	aio_recv = nng::aio();
 }
 
-void Rep_Async::_aioReceived(void *_comm)
+void Reply::_aioReceived(void *_comm)
 {
-	auto comm = static_cast<Rep_Async*>(_comm);
+	auto comm = static_cast<Reply*>(_comm);
 	auto &ctx = comm->ctx_aio_recv;
 	auto queryID = ctx.get().id;
 	auto delegate = comm->_delegate.lock();
 
-	Directive directive = Directive::TERMINATE;
-
-	bool await_delayed_response = false;
+	bool cancel = false;
 
 	// Call delegate
 	auto error = comm->aio_recv.result();
@@ -57,70 +54,43 @@ void Rep_Async::_aioReceived(void *_comm)
 	{
 		// No delegate; terminate
 		comm->aio_recv.release_msg();
-		directive = Directive::TERMINATE;
+		cancel = true;
 	}
 	else switch (error)
 	{
 	case nng::error::success:
 		{
-			Directive react = delegate->asyncRespond_recv(
-				queryID, std::move(comm->aio_recv.release_msg()));
-			directive = react.directive();
-
-			if (react.msg())
 			{
-				// Immediate response
-				comm->respondTo(queryID, react.release_msg());
-
-				// Dispose of context
-				ctx = nng::ctx();
+				// Pickle the context into a QueryID and store it for later.
+				std::lock_guard g(comm->unresponded_mtx);
+				comm->unresponded.emplace(queryID);
+				ctx.release();
 			}
-			else
+
+			// Deliver asynchronous event...
+			nng::msg responseMsg;
+			delegate->async_recv(
+				Replying{comm, queryID, {&responseMsg}},
+				std::move(comm->aio_recv.release_msg()));
+
+			// Responding through the tag
+			if (responseMsg)
 			{
-				// Delayed response, decline or terminate...
-				await_delayed_response = true;
+				comm->respondTo(queryID, std::move(responseMsg));
 			}
 		}
 		break;
 	case nng::error::canceled:
 	case nng::error::timedout:
 	default:
-		directive = delegate->asyncRespond_error(
-			ctx.get().id, error);
+		delegate->async_error(
+			Replying{comm, ctx.get().id}, error);
+		cancel = true;
 		break;
-	}
-
-	// Handle directive...
-	switch (directive)
-	{
-	default:
-	case Directive::AUTO:
-		if (error != nng::error::success)
-		{
-		case Directive::TERMINATE:
-			// Stop receiving messages
-			return;
-		}
-
-		[[fallthrough]];
-	case Directive::CONTINUE:
-		if (await_delayed_response)
-		{
-			// Evil pickling
-			std::lock_guard g(comm->unresponded_mtx);
-			comm->unresponded.emplace(queryID);
-			reinterpret_cast<nng_ctx&>(ctx).id = 0;
-		}
-
-		[[fallthrough]];
-	case Directive::DECLINE:
-		// Receive another message with a fresh context
-		ctx = nng::make_ctx(comm->socketView());
-		ctx.recv(comm->aio_recv);
 	}
 }
 
-void Rep_Async::respondTo(QueryID queryID, nng::msg &&msg)
+void Reply::respondTo(QueryID queryID, nng::msg &&msg)
 {
 	if (!isReady())
 		throw nng::exception(nng::error::closed, "Reply Communicator is not ready.");
@@ -133,7 +103,17 @@ void Rep_Async::respondTo(QueryID queryID, nng::msg &&msg)
 				"respondTo: no outstanding request with this queryID");
 	}
 
-	// Evil unpickling
+	// Allow the delegate to prep the message
+	if (auto delegate = _delegate.lock())
+	{
+		delegate->async_prep(Replying{this, queryID}, msg);
+	}
+	else
+	{
+		msg = nng::msg();
+	}
+
+	// Unpicle the NNG context and turn it over to sender.
 	nng_ctx _ctx = {queryID};
 
 	// Send or enqueue the reply.
@@ -151,9 +131,10 @@ void Rep_Async::respondTo(QueryID queryID, nng::msg &&msg)
 	}
 }
 
-void Rep_Async::_aioSent(void *_comm)
+void Reply::_aioSent(void *_comm)
 {
-	auto comm = static_cast<Rep_Async*>(_comm);
+	auto comm = static_cast<Reply*>(_comm);
+	auto delegate = comm->_delegate.lock();
 
 	// Halt?
 	switch (comm->aio_send.result())
@@ -163,6 +144,9 @@ void Rep_Async::_aioSent(void *_comm)
 	case nng::error::timedout:
 	default:                   return;
 	}
+
+	QueryID queryID = comm->ctx_aio_send.get().id;
+	delegate->async_sent(Replying{comm, queryID});
 
 	{
 		OutboxItem next;
@@ -186,7 +170,7 @@ void Rep_Async::_aioSent(void *_comm)
 */
 
 
-class Rep_Box::Delegate : public AsyncRespond
+class Reply_Box::Delegate : public AsyncReply
 {
 public:
 	struct Pending
@@ -200,42 +184,36 @@ public:
 	Delegate() {}
 	~Delegate() {}
 
-	Directive asyncRespond_recv(QueryID qid, nng::msg &&query) final
+	void async_recv(Replying rep, nng::msg &&query) final
 	{
-		inbox.push(Pending{qid, std::move(query)});
-		return CONTINUE;
+		inbox.push(Pending{rep.id, std::move(query)});
 	}
-	void asyncRespond_done(QueryID qid) final
-	{
-	}
-	Directive asyncRespond_error(QueryID qid, nng::error status) final
-	{
-		return TERMINATE;
-	}
+	void async_sent(Replying rep) final {}
+	void async_error(Replying rep, AsyncError status) final {}
 };
 
 
-Rep_Box::Rep_Box() :
-	Rep_Async()
+Reply_Box::Reply_Box() :
+	Reply()
 {
 	_init();
 }
-Rep_Box::Rep_Box(const Rep_Base &shareSocket) :
-	Rep_Async(shareSocket)
+Reply_Box::Reply_Box(const Reply_Pattern &shareSocket) :
+	Reply(shareSocket)
 {
 	_init();
 }
-Rep_Box::~Rep_Box()
+Reply_Box::~Reply_Box()
 {
 }
 
-void Rep_Box::_init()
+void Reply_Box::_init()
 {
 	initialize(_replyBox = std::make_shared<Delegate>());
 }
 
 
-bool Rep_Box::receive(nng::msg  &request)
+bool Reply_Box::receive(nng::msg  &request)
 {
 	if (!isReady())
 		throw nng::exception(nng::error::closed, "Reply Communicator is not ready.");
@@ -254,7 +232,7 @@ bool Rep_Box::receive(nng::msg  &request)
 	else return false;
 }
 
-void Rep_Box::respond(nng::msg &&msg)
+void Reply_Box::respond(nng::msg &&msg)
 {
 	if (!isReady())
 		throw nng::exception(nng::error::closed, "Reply Communicator is not ready.");

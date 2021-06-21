@@ -44,15 +44,15 @@ namespace telling
 
 
 		// Access communicators.
-		service::Reply_Base   *replier()   noexcept final    {return &_replier;}
-		service::Publish_Base *publisher() noexcept final    {return &_publisher;}
-		service::Pull_Base    *puller()    noexcept final    {return &_puller;}
+		Reply_Base   *replier()   noexcept final    {return &_replier;}
+		Publish_Base *publisher() noexcept final    {return &_publisher;}
+		Pull_Base    *puller()    noexcept final    {return &_puller;}
 
 
 	protected:
-		service::Reply_Box   _replier;
-		service::Publish_Box _publisher;
-		service::Pull_Box    _puller;
+		Reply_Box   _replier;
+		Publish_Box _publisher;
+		Pull_Box    _puller;
 	};
 
 
@@ -66,6 +66,19 @@ namespace telling
 
 
 	protected:
+		struct Query
+		{
+			QueryID    id;
+			SendPrompt reply;
+
+			// Call this to signal the Reactor will reply later through Service API.
+			void defer() noexcept    {}
+		};
+
+		// Return value when Reactor intends to defer reply.
+		nng::msg NotImplemented();
+
+
 		/*
 			Services must always implement GET requests (but may decline them).
 				The semantics of these methods are as defined in HTTP.
@@ -73,38 +86,39 @@ namespace telling
 
 			Requests have non-zero QueryID and support immediate or delayed replies.
 				Reply immediately by returning an nng::msg&& from the function.
-				Reply later by using the QueryID with calls to Service_Async,
+				Reply later by using the QueryID with calls to Service.
 
 			Push messages will have a QueryID of 0 and don't support replying.
+				In this case, returned messages will be discarded.
 				Push/Pull messages that don't satisfy Method::allowNoResponse will be ignored.
 		*/
 
 		// Return the set of allowed methods.
-		virtual Methods       allowed() const noexcept = 0;
+		virtual Methods  allowed() const noexcept = 0;
 
 		// Safe methods (no PUSH support)
-		virtual Directive recv_get    (QueryID id, const MsgView::Request &req, nng::msg &&msg) = 0;
-		virtual Directive recv_head   (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
-		virtual Directive recv_trace  (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
-		virtual Directive recv_options(QueryID id, const MsgView::Request &req, nng::msg &&msg);
+		virtual void async_get    (Query q, const MsgView::Request &req, nng::msg &&msg) = 0;
+		virtual void async_head   (Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
+		virtual void async_trace  (Query q, const MsgView::Request &req, nng::msg &&msg);
+		virtual void async_options(Query q, const MsgView::Request &req, nng::msg &&msg);
 
 		// Idempotent methods
-		virtual Directive recv_put    (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
-		virtual Directive recv_delete (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual void async_put    (Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
+		virtual void async_delete (Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
 
 		// Other methods
-		virtual Directive recv_patch  (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
-		virtual Directive recv_post   (QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual void async_patch  (Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
+		virtual void async_post   (Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
 
 		// Undefined (as of HTTP/1.1) method names
-		virtual Directive recv_UNKNOWN(QueryID id, const MsgView::Request &req, nng::msg &&msg)    {return DECLINE;}
+		virtual void async_UNKNOWN(Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
 
 
 	protected:
 		// Implementation...
-		Directive _handle     (QueryID,    nng::msg &&);
-		Directive pull_recv   (            nng::msg &&request) override;
-		Directive request_recv(QueryID id, nng::msg &&request) override;
+		void _handle(Query, nng::msg &&);
+		void async_recv(Pulling,      nng::msg &&request) override    {_handle(Query{0},                std::move(request));}
+		void async_recv(Replying rep, nng::msg &&request) override    {_handle(Query{rep.id, rep.send}, std::move(request));}
 
 		std::mutex    reactor_mtx;
 	};
@@ -113,12 +127,12 @@ namespace telling
 	/*
 		A service which receives and responds to messages using asynchronous events.
 	*/
-	class Service_Async : public Service_Base
+	class Service : public Service_Base
 	{
 	public:
-		Service_Async(std::weak_ptr<ServiceHandler_Base> handler,
+		Service(std::weak_ptr<ServiceHandler_Base> handler,
 			std::string _uri, std::string_view serverID = DefaultServerID());
-		~Service_Async();
+		~Service();
 
 		/*
 			Publish a message to a topic (URI).
@@ -132,15 +146,15 @@ namespace telling
 
 
 		// Access communicators.
-		service::Reply_Base   *replier()   noexcept final    {return &_replier;}
-		service::Publish_Base *publisher() noexcept final    {return &_publisher;}
-		service::Pull_Base    *puller()    noexcept final    {return &_puller;}
+		Reply_Base   *replier()   noexcept final    {return &_replier;}
+		Publish_Base *publisher() noexcept final    {return &_publisher;}
+		Pull_Base    *puller()    noexcept final    {return &_puller;}
 
 
 	protected:
 		//std::weak_ptr<Handler> handler;
-		service::Reply_Async     _replier;
-		service::Pull_Async      _puller;
-		service::Publish_Async   _publisher;
+		Reply     _replier;
+		Pull      _puller;
+		Publish   _publisher;
 	};
 }

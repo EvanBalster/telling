@@ -90,9 +90,6 @@
     <ClInclude Include="..\..\include\telling\service_registration.h">
       <Filter>service</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\include\telling\service_base.h">
-      <Filter>service</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\include\telling\deposit.h" />
     <ClInclude Include="..\..\include\telling\afar.h" />
     <ClInclude Include="..\..\include\telling\http_client.h">
@@ -103,6 +100,12 @@
     </ClInclude>
     <ClInclude Include="..\..\include\telling\msg_uri.h">
       <Filter>msg</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\async_loop.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\service_base.h">
+      <Filter>service</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

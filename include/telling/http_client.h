@@ -13,12 +13,28 @@
 #include <nngpp/transport/tls/config.h>
 #include <nngpp/url.h>
 
-#include "async.h"
+#include "async_loop.h"
 #include "host_address.h"
 
 
 namespace telling
 {
+	class HttpClient_Base;
+	class HttpClient;      // inherits HttpClient_Base
+	class HttpClient_Box;  // inherits HttpClient
+
+	// Tag delivered to callbacks
+	struct HttpRequesting
+	{
+		HttpClient *comm;
+		QueryID     id;
+	};
+
+	// Base class for asynchronous I/O
+	using AsyncHttpReq     = AsyncQuery<HttpRequesting>;
+	using AsyncHttpRequest = AsyncHttpReq;
+
+
 	/*
 		Base type for HTTP clients.
 	*/
@@ -49,12 +65,12 @@ namespace telling
 	/*
 		HTTP Client with asynchronous events.
 	*/
-	class HttpClient_Async : public HttpClient_Base
+	class HttpClient : public HttpClient_Base
 	{
 	public:
 		using conn_view = nng::http::conn_view;
 
-		class Handler : public AsyncEnums
+		class Handler : public AsyncHttpRequest
 		{
 		public:
 			virtual ~Handler() {}
@@ -62,19 +78,17 @@ namespace telling
 			virtual void      httpConn_open  (conn_view conn) {}
 			virtual void      httpConn_close (conn_view conn) {}
 
-			virtual Directive httpQuery_made (QueryID, const nng::msg &query)     {return CONTINUE;}
-			virtual Directive httpQuery_sent (QueryID)                            {return CONTINUE;}
-			virtual Directive httpQuery_done (QueryID, nng::msg &&response)       = 0;
-			virtual Directive httpQuery_error(QueryID, nng::error status)         = 0;
-
-			// TODO allow chaining queries from httpQuery_done
+			void async_prep (HttpRequesting, nng::msg &query) override     {}
+			void async_sent (HttpRequesting)                  override     {}
+			//void async_recv (HttpRequesting, nng::msg &&response)   override     = 0;
+			//void async_error(HttpRequesting, nng::error status)     override     = 0;
 		};
 
 
 	public:
 		// Construct with URL of host.
-		HttpClient_Async(nng::url &&_host, std::weak_ptr<Handler> = {});
-		~HttpClient_Async() override;
+		HttpClient(nng::url &&_host, std::weak_ptr<Handler> = {});
+		~HttpClient() override;
 
 
 		/*
@@ -125,7 +139,7 @@ namespace telling
 			Supports multiple pending requests.
 			Requests are handled with std::future.
 	*/
-	class HttpClient_Box : public HttpClient_Async
+	class HttpClient_Box : public HttpClient
 	{
 	public:
 		explicit HttpClient_Box(nng::url &&_host);

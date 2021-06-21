@@ -60,7 +60,7 @@ namespace edb
 	*/
 	namespace detail
 	{
-		void life_lock_wait(std::atomic_flag &lock)
+		inline void life_lock_wait(std::atomic_flag &lock)
 		{
 #if LIFE_LOCK_CPP20
 			// Use standard C++ library's notify mechanism.
@@ -227,9 +227,17 @@ namespace edb
 		};
 		shared_ref _ref = shared_ref();
 		std::atomic_flag &_lock() noexcept    {return reinterpret_cast<std::atomic_flag&>(_ref);}
+
+		// Prevent implicit copying of life_lock.
+		//    life_lock holds a shared reference and thus blocks destruction of its clones.
+		//    TODO consider an explicit cloning method for careful multithreaded use.
+		life_lock           (const life_lock &o) noexcept = delete;
+		life_lock& operator=(const life_lock &o) noexcept = delete;
 	};
 
 
+	// Placeholder for life_locked constructor
+	enum life_locked_empty_t    {life_locked_empty};
 
 	/*
 		This class contains an object protected by a life_lock.
@@ -241,23 +249,23 @@ namespace edb
 	class life_locked
 	{
 	public:
-		// Construct an empty weak_holder.
-		life_locked()     : _lock() {}
-
-		// Construct a weak_holder with T's constructor arguments, or T() for the default constructor.
-		template<typename Arg1, typename... Args>
-		life_locked(Arg1 &&arg1, Args&&... args)    {_lock = life_lock(new (_t()) T (std::forward<Arg1>(arg1), std::forward<Args>(args)...));}
+		// Construct with T's constructor arguments, or T() for the default constructor.
+		template<typename... Args>
+		life_locked(Args&&... args)    : _lock(new (_t()) T (std::forward<Args>(args)...)) {}
+		
+		// Construct life_locked in an empty/destroyed state.
+		life_locked(life_locked_empty_t)    {}
 
 		// Wait until all shared_ptr have expired and destroy the contained object.
 		~life_locked()    {destroy();}
-		void destroy()    {if (_lock) {_lock.destroy(); raw_ptr()->~T();}}
-		void reset()      {if (_lock) {_lock.destroy(); raw_ptr()->~T();}}  // "reset" alias for consistency with std::optional
+		void destroy()    {if (_lock) {_lock.destroy(); _t()->~T();}}
+		void reset()      {if (_lock) {_lock.destroy(); _t()->~T();}}  // "reset" alias for consistency with std::optional
 
 		// Get weak pointer
-		std::weak_ptr<T>       get_weak() const noexcept    {return _lock.get_weak(raw_ptr());}
-		std::weak_ptr<const T> get_weak()       noexcept    {return _lock.get_weak(raw_ptr());}
-		operator std::weak_ptr<T>      () const noexcept    {return _lock.get_weak(raw_ptr());}
-		operator std::weak_ptr<const T>()       noexcept    {return _lock.get_weak(raw_ptr());}
+		std::weak_ptr      <T> get_weak()       noexcept    {return _lock.get_weak(raw_ptr());}
+		std::weak_ptr<const T> get_weak() const noexcept    {return _lock.get_weak(raw_ptr());}
+		operator std::weak_ptr      <T>()       noexcept    {return _lock.get_weak(raw_ptr());}
+		operator std::weak_ptr<const T>() const noexcept    {return _lock.get_weak(raw_ptr());}
 
 		// Check on contained value
 		bool has_value()         const noexcept    {return _lock;}

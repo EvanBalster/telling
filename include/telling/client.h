@@ -35,9 +35,9 @@ namespace telling
 		/*
 			Access individual communicators.
 		*/
-		virtual client::Request_Base   *requester()  noexcept = 0;
-		virtual client::Subscribe_Base *subscriber() noexcept = 0;
-		virtual client::Push_Base      *pusher()     noexcept = 0;
+		virtual Request_Base   *requester()  noexcept = 0;
+		virtual Subscribe_Base *subscriber() noexcept = 0;
+		virtual Push_Base      *pusher()     noexcept = 0;
 
 
 		/*
@@ -79,61 +79,60 @@ namespace telling
 			Check for messages from subscribed topics.
 				No messages will be received unless you subscribe() to something!
 		*/
-		bool consume    (nng::msg &msg)                   {return _subscriber.consume(msg);}
+		bool consume    (nng::msg &msg)                  {return _subscriber.consume(msg);}
 
 
 		// Access communicators.
-		client::Request_Base   *requester()  noexcept final    {return &_requester;}
-		client::Subscribe_Base *subscriber() noexcept final    {return &_subscriber;}
-		client::Push_Base      *pusher()     noexcept final    {return &_pusher;}
+		Request_Base   *requester()  noexcept final    {return &_requester;}
+		Subscribe_Base *subscriber() noexcept final    {return &_subscriber;}
+		Push_Base      *pusher()     noexcept final    {return &_pusher;}
 
 
 	protected:
-		client::Request_Box   _requester;
-		client::Subscribe_Box _subscriber;
-		client::Push_Box      _pusher;
+		Request_Box   _requester;
+		Subscribe_Box _subscriber;
+		Push_Box      _pusher;
 	};
 
 
 	/*
 		A client which receives messages using asynchronous events.
 	*/
-	class Client_Async : public Client_Base
+	class Client : public Client_Base
 	{
 	public:
 		/*
 			Asynchronous events are delivered to a delegate object.
 		*/
 		class Handler :
-			public AsyncSend,
-			public AsyncRecv,
-			public AsyncQuery
+			public AsyncRequest,
+			public AsyncSubscribe,
+			public AsyncPush
 		{
 		public:
-			virtual ~Handler() {}
-
-			using Directive = telling::Directive;
 			using QueryID   = telling::QueryID;
 
 
 		protected:
+			virtual ~Handler() {}
+
 			// Receive a subscribe message.
 			// There is no method for replying.
-			virtual Directive subscribe_recv (nng::msg &&bulletin) = 0;
-			virtual Directive subscribe_error(nng::error)         {return AUTO;}
+			virtual void subscribe_recv (nng::msg &&bulletin) = 0;
+			virtual void subscribe_error(AsyncError)         {}
 
 			// Receive a reply to some earlier request.
-			virtual Directive reply_recv   (QueryID id, nng::msg &&reply) = 0;
+			virtual void reply_recv   (QueryID id, nng::msg &&reply) = 0;
 
 			// Request processing status (optional).
 			// request_error may be also be triggered if there is some error sending a request.
-			virtual Directive request_made (QueryID id, const nng::msg &request)    {return CONTINUE;}
-			virtual Directive request_sent (QueryID id)                             {return CONTINUE;}
-			virtual Directive request_error(QueryID id, nng::error)                 {return AUTO;}
+			virtual void request_prep (QueryID id, nng::msg &request)    {}
+			virtual void request_sent (QueryID id)                       {}
+			virtual void request_error(QueryID id, AsyncError)           {}
 
 			// Push outbox status (optional)
-			virtual Directive push_sent ()              {return CONTINUE;}
-			virtual Directive push_error(nng::error)    {return AUTO;}
+			virtual void push_sent ()              {}
+			virtual void push_error(AsyncError)    {}
 
 			// Optionally receive pipe events from the various sockets.
 			virtual void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) {}
@@ -143,25 +142,25 @@ namespace telling
 			SendQueueMtx pushQueue;
 
 			// AsyncQuery impl.
-			Directive asyncQuery_made (QueryID qid, const nng::msg &msg) final    {return this->request_made(qid, msg);}
-			Directive asyncQuery_sent (QueryID qid)                      final    {return this->request_sent(qid);}
-			Directive asyncQuery_done (QueryID qid, nng::msg &&reply)    final    {return this->reply_recv(qid, std::move(reply));}
-			Directive asyncQuery_error(QueryID qid, nng::error status)   final    {return request_error(qid, status);}
+			void async_prep (Requesting req, nng::msg &msg)     final    {this->request_prep(req.id, msg);}
+			void async_sent (Requesting req)                    final    {this->request_sent(req.id);}
+			void async_recv (Requesting req, nng::msg &&reply)  final    {this->reply_recv(req.id, std::move(reply));}
+			void async_error(Requesting req, AsyncError status) final    {request_error(req.id, status);}
 
-			// AsyncRecv (Pull) impl.
-			Directive asyncRecv_msg  (nng::msg &&msg   ) final    {return this->subscribe_recv(std::move(msg));}
-			Directive asyncRecv_error(nng::error status) final    {return this->subscribe_error(status);}
+			// AsyncRecv (Subscribe) impl.
+			void async_recv (Subscribing, nng::msg &&msg   ) final    {this->subscribe_recv(std::move(msg));}
+			void async_error(Subscribing, AsyncError status) final    {this->subscribe_error(status);}
 
-			// AsyncSend (Publish) impl.
-			Directive asyncSend_msg  (nng::msg &&msg)    final;
-			Directive asyncSend_sent ()                  final;
-			Directive asyncSend_error(nng::error status) final    {return this->push_error(status);}
+			// AsyncSend (Push) impl.
+			void async_prep (Pushing, nng::msg &msg)     final;
+			void async_sent (Pushing)                    final;
+			void async_error(Pushing, AsyncError status) final    {this->push_error(status);}
 		};
 
 
 	public:
-		Client_Async(std::weak_ptr<Handler> handler);
-		~Client_Async();
+		Client(std::weak_ptr<Handler> handler);
+		~Client();
 
 		/*
 			Push a message to the server. Throws nng::exception on failure.
@@ -181,15 +180,15 @@ namespace telling
 
 
 		// Access communicators.
-		client::Request_Base   *requester()  noexcept final    {return &_requester;}
-		client::Subscribe_Base *subscriber() noexcept final    {return &_subscriber;}
-		client::Push_Base      *pusher()     noexcept final    {return &_pusher;}
+		Request_Base   *requester()  noexcept final    {return &_requester;}
+		Subscribe_Base *subscriber() noexcept final    {return &_subscriber;}
+		Push_Base      *pusher()     noexcept final    {return &_pusher;}
 
 
 	protected:
 		//std::weak_ptr<Handler> handler;
-		client::Request_Async    _requester;
-		client::Subscribe_Async  _subscriber;
-		client::Push_Async       _pusher;
+		Request    _requester;
+		Subscribe  _subscriber;
+		Push       _pusher;
 	};
 }

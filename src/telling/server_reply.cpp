@@ -6,33 +6,28 @@ using namespace telling;
 
 
 
-Server::Reply::Reply() :
+Server::ReqRep::ReqRep() :
 	reply_ext  (Role::SERVICE, Pattern::REQ_REP, Socket::RAW),
 	request_dvc(Role::CLIENT,  Pattern::REQ_REP, Socket::RAW),
 	reply_int  (Role::SERVICE, Pattern::REQ_REP, Socket::RAW),
-	rep_send(reply_int.socketView()),
-	rep_recv(reply_int.socketView()),
-	delegate_reply(std::make_shared<Delegate_Reply>(this))
+	rep_send(reply_int.socketView(), ServerResponding{}),
+	rep_recv(reply_int.socketView(), ClientRequesting{})
 {
 	auto server = this->server();
 	auto &log = server->log;
 
-	rep_sendQueue    = std::make_shared<AsyncSendQueue>();
-	delegate_request = std::make_shared<Delegate_Request>(this);
-
-	rep_send.send_init(rep_sendQueue);
-	rep_recv.recv_start(delegate_request);
+	rep_send.send_init (rep_sendQueue.get_weak());
+	rep_recv.recv_start(get_weak());
 
 	// Set up device relay
 	reply_int  .listen(server->address_internal);
 	request_dvc.dial  (server->address_internal);
 	thread_device = std::thread(&run_device, this);
 }
-Server::Reply::~Reply()
+Server::ReqRep::~ReqRep()
 {
-	// Disconnect delegates
-	delegate_reply  ->stop();
-	delegate_request->stop();
+	// Stop asynchronous work
+	async_lifetime.destroy();
 
 	// Close reply socket (halting further activity)
 	reply_int.close();
@@ -47,7 +42,7 @@ Server::Reply::~Reply()
 	thread_device.join();
 }
 
-void Server::Reply::run_device(Reply *reply)
+void Server::ReqRep::run_device(ReqRep *reply)
 {
 	try
 	{
@@ -61,52 +56,53 @@ void Server::Reply::run_device(Reply *reply)
 }
 
 
-Directive Server::Reply::receive_error(Delegate_Request*, nng::error error)
+void Server::ReqRep::async_error(ClientRequesting, AsyncError error)
 {
-	server()->log << Name() << ": Request ingestion error: " << nng::to_string(error) << std::endl;
-	return Directive::AUTO;
+	server()->log << Name() << ": Request ingestion error: " << error.what() << std::endl;
 }
-Directive Server::Reply::receive_error(Delegate_Reply  *, nng::error error)
+void Server::ReqRep::async_error(ServiceReplying, AsyncError error)
 {
 	if (error != nng::error::closed)
 	{
-		server()->log << Name() << ": Reply ingestion error: " << nng::to_string(error) << std::endl;
+		server()->log << Name() << ": Reply ingestion error: " << error.what() << std::endl;
 	}
-	return Directive::AUTO;
 }
 
-Directive Server::Reply::received(const MsgView::Reply &reply, nng::msg &&msg)
+void Server::ReqRep::async_recv(ServiceReplying, nng::msg &&msg)
 {
-	// Only one reply will be received at a time so this is thread-safe.
+	// Multiple instances of this call might be received concurrently.
+	//    AsyncSendQueue is mutexed...
 
-	server()->log << Name() << ": ...sending reply with status " << reply.status() << std::endl;
+	server()->log << Name() << ": ...sending reply..." << std::endl;
 
-	// Forward reply to proper 
+	// Forward reply to proper client
 	try
 	{
 		rep_send.send_msg(std::move(msg));
-		return Directive::CONTINUE;
 	}
 	catch (nng::exception e)
 	{
 		server()->log
 			<< Name() << ": could not enqueue reply to client" << std::endl
 			<< "\t" << e.what() << std::endl;
-		return Directive::DECLINE;
 	}
 }
 
-Directive Server::Reply::received(const MsgView::Request &request, nng::msg &&msg)
+void Server::ReqRep::async_recv(ClientRequesting, nng::msg &&msg)
 {
 	auto server = this->server();
 
+	MsgView::Request request;
+	try                    {request = msg;}
+	catch (MsgException e) {server->log << Name() << ": message exception: " << e.what() << std::endl; return;}
+
 	auto status = server->services.routeRequest(request.uri(), std::move(msg));
 
-	//server->log << Name() << ": routing to `" << request.uri << "`" << std::endl;
+	server->log << Name() << ": routing to `" << request.uri() << "`" << std::endl;
 
 	if (status.isSuccessful())
 	{
-		return Directive::CONTINUE;
+		// Neat!
 	}
 	else
 	{
@@ -120,10 +116,6 @@ Directive Server::Reply::received(const MsgView::Request &request, nng::msg &&ms
 		// Error reply
 		writer.startReply(status);
 
-		// Copy routing info
-		if (msg) writer.setNNGHeader(msg.header().get());
-		else     server->log << "\tPROBLEM: request was discarded, can't reply" << std::endl;
-
 		switch (status.code)
 		{
 		case StatusCode::NotFound:
@@ -136,8 +128,12 @@ Directive Server::Reply::received(const MsgView::Request &request, nng::msg &&ms
 			break;
 		}
 
-		delegate_reply->asyncRecv_msg(writer.release());
 
-		return Directive::DECLINE;
+		// Copy routing info
+		if (msg) writer.setNNGHeader(msg.header().get());
+		else     server->log << "\tPROBLEM: request was discarded, can't reply" << std::endl;
+
+		// Reply, acting as a service.
+		async_recv(ServiceReplying{}, writer.release());
 	}
 }

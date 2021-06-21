@@ -33,8 +33,8 @@ namespace telling
 		void writeHeader(std::string_view name, std::string_view value);
 
 		// Specific headers...
-		void writeHeader_Allowed(Methods methods);
-		void writeHeader_Length (size_t  maxLength = ~uint32_t(0));
+		void writeHeader_Allow (Methods methods);
+		void writeHeader_Length(size_t  maxLength = ~uint32_t(0));
 
 
 		/*

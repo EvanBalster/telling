@@ -188,7 +188,7 @@ void MsgWriter::setNNGHeader(nng::view data)
 
 
 
-void MsgWriter::writeHeader_Allowed(Methods methods)
+void MsgWriter::writeHeader_Allow(Methods methods)
 {
 	std::string allowed;
 
@@ -208,7 +208,7 @@ void MsgWriter::writeHeader_Allowed(Methods methods)
 		}
 	}
 
-	writeHeader("Allowed", allowed);
+	writeHeader("Allow", allowed);
 }
 
 void MsgWriter::writeHeader_Length(size_t maxLength)

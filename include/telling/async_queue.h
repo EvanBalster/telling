@@ -7,37 +7,36 @@
 
 namespace telling
 {
-	class AsyncRecvQueue : public AsyncRecv, public RecvQueueMtx
+	template<typename Tag>
+	class AsyncRecvQueue : public AsyncRecv<Tag>, public RecvQueueMtx
 	{
 	public:
 		AsyncRecvQueue() {}
 		~AsyncRecvQueue() override {}
 
-		Directive asyncRecv_msg(nng::msg &&recvMsg) override
+		void async_recv(Tag, nng::msg &&recvMsg) override
 		{
 			RecvQueueMtx::push(std::move(recvMsg));
-			return AUTO;
 		}
 	};
 
-
-	class AsyncSendQueue : public AsyncSend, public SendQueueMtx
+	template<typename Tag>
+	class AsyncSendQueue : public AsyncSend<Tag>, public SendQueueMtx
 	{
 	public:
 		AsyncSendQueue() {}
 		~AsyncSendQueue() override {}
 
-		Directive asyncSend_msg(nng::msg &&msg) override
+		void async_prep(Tag tag, nng::msg &msg) override
 		{
-			if (SendQueueMtx::produce(std::move(msg))) return CONTINUE;
-			else return std::move(msg);
+			if (SendQueueMtx::produce(std::move(msg))) return;
+			tag.send(std::move(msg));
 		}
 
-		Directive asyncSend_sent() override
+		void async_sent(Tag tag) override
 		{
 			nng::msg next;
-			if (SendQueueMtx::consume(next)) return next;
-			else                             return DECLINE;
+			if (SendQueueMtx::consume(next)) tag.send(std::move(next));
 		}
 	};
 }

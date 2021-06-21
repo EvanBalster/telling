@@ -5,7 +5,6 @@
 
 
 using namespace telling;
-using namespace telling::client;
 
 
 /*
@@ -13,23 +12,24 @@ using namespace telling::client;
 */
 
 
-struct Req_Async::Action
+struct Request::Action
 {
 	friend class Request;
 
-	Req_Async* const       request;
+	Request* const         request;
 	nng::aio               aio;
 	nng::ctx               ctx;
 	ACTION_STATE           state;
 	//std::promise<nng::msg> promise;
 
-	QueryID queryID() const noexcept    {return ctx.get().id;}
+	QueryID    queryID()    const noexcept    {return ctx.get().id;}
+	Requesting requesting() const noexcept    {return Requesting{request, queryID()};}
 
 	static void _callback(void*);
 };
 
 
-Req_Base::MsgStats Req_Async::msgStats() const noexcept
+Request_Base::MsgStats Request::msgStats() const noexcept
 {
 	std::lock_guard<std::mutex> g(mtx);
 
@@ -46,7 +46,7 @@ Req_Base::MsgStats Req_Async::msgStats() const noexcept
 }
 
 
-Req_Async::~Req_Async()
+Request::~Request()
 {
 	// Cancel all active AIO
 	{
@@ -73,16 +73,16 @@ Req_Async::~Req_Async()
 	}
 }
 
-void Req_Async::initialize(std::weak_ptr<AsyncQuery> delegate)
+void Request::initialize(std::weak_ptr<AsyncRequest> delegate)
 {
 	if (_delegate.lock())
-		throw nng::exception(nng::error::busy, "Request_Async::initialize (already initialized)");
+		throw nng::exception(nng::error::busy, "Request::initialize (already initialized)");
 
 	if (delegate.lock())
 		_delegate = delegate;
 }
 
-QueryID Req_Async::request(nng::msg &&msg)
+QueryID Request::request(nng::msg &&msg)
 {
 	auto delegate = _delegate.lock();
 	if (!isReady())
@@ -90,44 +90,35 @@ QueryID Req_Async::request(nng::msg &&msg)
 	if (!delegate)
 		throw nng::exception(nng::error::exist, "Request communicator has no delegate to handle messages");
 
-	Action *action = nullptr;
+	std::lock_guard<std::mutex> lock(mtx);
 
 	// Allocate.
+	Action *action = nullptr;
+	if (idle.empty())
 	{
-		std::lock_guard<std::mutex> lock(mtx);
+		action = new Action{this};
+		action->ctx = make_ctx();
+		action->aio = nng::make_aio(&Action::_callback, action);
+	}
+	else
+	{
+		action = idle.front();
+		idle.pop_front();
+	}
 
-		if (idle.empty())
-		{
-			action = new Action{this};
-			action->ctx = make_ctx();
-			action->aio = nng::make_aio(&Action::_callback, action);
-		}
-		else
-		{
-			action = idle.front();
-			idle.pop_front();
-		}
+	delegate->async_prep(action->requesting(), msg);
 
-		auto directive = delegate->asyncQuery_made(action->queryID(), msg);
+	if (!msg)
+	{
+		idle.push_front(action);
+		action = nullptr;
+		throw nng::exception(nng::error::canceled,
+			"AsyncQuery declined the message.");
+	}
 
-		switch (directive)
-		{
-		case Directive::DECLINE:
-		case Directive::TERMINATE:
-			idle.push_front(action);
-			action = nullptr;
-			throw nng::exception(nng::error::canceled,
-				"AsyncQuery declined the message.");
-			break;
-
-		case Directive::AUTO:
-		case Directive::CONTINUE:
-		default:
-			action->state = SEND;
-			active.insert(action);
-			break;
-		}
-	} // Release lock
+	// Proceed
+	action->state = SEND;
+	active.insert(action);
 
 	// Prepare send
 	action->aio.set_msg(std::move(msg));
@@ -136,68 +127,70 @@ QueryID Req_Async::request(nng::msg &&msg)
 	return action->queryID();
 }
 
-void Req_Async::Action::_callback(void *_action)
+void Request::Action::_callback(void *_action)
 {
-	auto action = static_cast<Req_Async::Action*>(_action);
+	auto action = static_cast<Request::Action*>(_action);
 	auto comm = action->request;
-	auto delegate = comm->_delegate.lock();
 
-	Directive directive;
 	bool cleanup = false;
+	bool cancel  = false;
 
 	// Errors / callbacks
 	auto error = action->aio.result();
-	if (!delegate)
 	{
-		// Terminate communications if delegate is gone
-		if (action->state == RECV && error == nng::error::success)
-			action->aio.release_msg();
-		directive = Directive::TERMINATE;
-	}
-	else switch (error)
-	{
-	case nng::error::success:
-		switch (action->state)
+		auto delegate = comm->_delegate.lock();
+
+		if (!delegate)
 		{
-		case SEND:
-			// Send
-			directive = delegate->asyncQuery_sent(action->queryID());
+			// Terminate communications if delegate is gone
+			if (action->state == RECV && error == nng::error::success)
+				action->aio.release_msg();
+			cleanup = true;
+			cancel = true;
+		}
+		else switch (error)
+		{
+		case nng::error::success:
+			switch (action->state)
+			{
+			case SEND:
+				// Sent!
+				delegate->async_sent(action->requesting());
+				break;
+			case RECV:
+				// Receive the response
+				delegate->async_recv(action->requesting(), action->aio.release_msg());
+				cleanup = true;
+			default:
+			case IDLE:
+				// Shouldn't happen???
+				cleanup = true;
+				break;
+			}
 			break;
-		case RECV:
-			// Receive the response
-			directive = delegate->asyncQuery_done(action->queryID(), action->aio.release_msg());
-			cleanup = true;
+		case nng::error::canceled:
+		case nng::error::timedout:
 		default:
-		case IDLE:
-			// Shouldn't happen???
+			// Causes the query to be canceled.
+			delegate->async_error(action->requesting(), error);
 			cleanup = true;
+			cancel = true;
 			break;
 		}
-		break;
-	case nng::error::canceled:
-	case nng::error::timedout:
-	default:
-		// Causes the query to be canceled.
-		directive = delegate->asyncQuery_error(action->queryID(), error);
-		cleanup = true;
-		break;
 	}
 
-
-	// Cleanup conditions...
-	if (directive == Directive::TERMINATE || directive == Directive::DECLINE)
-		cleanup = true;
-
-	if (cleanup)
+	if (cancel || cleanup)
 	{
-		// Clear AIO message
+		// Clear AIO message.  Possibly cancels the operation?
 		action->aio.set_msg(nullptr);
+
+		//TODO // Does this leave ctx in receiving state??
 	}
 
 
 	std::lock_guard<std::mutex> lock(comm->mtx);
 
-	if (cleanup) action->state = IDLE;
+	if (cancel || cleanup) action->state = IDLE;
 
 	switch (action->state)
 	{
@@ -229,7 +222,7 @@ void Req_Async::Action::_callback(void *_action)
 */
 
 
-class Req_Box::Delegate : public AsyncQuery
+class Request_Box::Delegate : public AsyncRequest
 {
 public:
 	struct Pending
@@ -261,41 +254,33 @@ public:
 	}
 
 	
-	Directive asyncQuery_made (QueryID qid, const nng::msg &query) final
+	void async_prep(Requesting req, nng::msg &query) final
 	{
 		// TODO could more cheaply allocate nng::msg?
 		std::lock_guard g(mtx);
-		pending.emplace(qid, Pending{});
-		newQueryID = qid;
-
-		return CONTINUE;
+		pending.emplace(req.id, Pending{});
+		newQueryID = req.id;
 	}
-	Directive asyncQuery_sent (QueryID qid)                        final
+	void async_sent(Requesting req)                        final
 	{
-		auto pos = pending.find(qid);
+		auto pos = pending.find(req.id);
 		if (pos != pending.end()) pos->second.sent = true;
-		return CONTINUE;
 	}
-	Directive asyncQuery_done (QueryID qid, nng::msg &&response)   final
+	void async_recv(Requesting req, nng::msg &&response)   final
 	{
 		std::lock_guard g(mtx);
 
-		auto pos = pending.find(qid);
+		auto pos = pending.find(req.id);
 		if (pos != pending.end())
 		{
 			pos->second.promise.set_value(std::move(response));
 			pending.erase(pos);
-			return CONTINUE;
-		}
-		else
-		{
-			return DECLINE;
 		}
 	}
-	Directive asyncQuery_error(QueryID qid, nng::error status)     final
+	void async_error(Requesting req, AsyncError status)     final
 	{
 		std::lock_guard g(mtx);
-		auto pos = pending.find(qid);
+		auto pos = pending.find(req.id);
 		if (pos != pending.end())
 		{
 			pos->second.promise.set_exception(std::make_exception_ptr(
@@ -304,24 +289,22 @@ public:
 					: "Request could not be sent.")));
 			pending.erase(pos);
 		}
-
-		return TERMINATE;
 	}
 };
 
 
-Req_Box::Req_Box()                     : Req_Async() {_init();}
-Req_Box::Req_Box(const Req_Base &o)    : Req_Async(o) {_init();}
-Req_Box::~Req_Box()                    {}
+Request_Box::Request_Box()                     : Request() {_init();}
+Request_Box::Request_Box(const Request_Base &o)    : Request(o) {_init();}
+Request_Box::~Request_Box()                    {}
 
-void Req_Box::_init()
+void Request_Box::_init()
 {
 	_requestBox = std::make_shared<Delegate>();
 	initialize(_requestBox);
 }
 
-std::future<nng::msg> Req_Box::request(nng::msg &&msg)
+std::future<nng::msg> Request_Box::request(nng::msg &&msg)
 {
-	auto qid = this->Request_Async::request(std::move(msg));
+	auto qid = this->Request::request(std::move(msg));
 	return _requestBox->getFuture(qid);
 }

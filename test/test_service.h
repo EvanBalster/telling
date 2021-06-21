@@ -10,7 +10,7 @@ namespace telling_test
 {
 	using namespace telling;
 
-	class Test_Responder : public Service_Async
+	class Test_Responder : public Service
 	{
 	public:
 		class Receiver : public Reactor
@@ -25,7 +25,7 @@ namespace telling_test
 			Receiver(Test_Responder &_service, std::string _reply) : service(&_service), txt_reply(_reply) {}
 			~Receiver() {}
 
-			Directive recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
+			void recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
 			{
 				MsgView::Request req;
 				try
@@ -39,7 +39,7 @@ namespace telling_test
 				}
 
 				std::lock_guard g(mtx);
-				if (!service) return TERMINATE;
+				if (!service) return;
 
 				if (queryID)
 				{
@@ -54,17 +54,15 @@ namespace telling_test
 				}
 				else
 				{
+					// Ignore pushed messages
 					++service->push_count;
-
-					// Ignore push messages.
-					return CONTINUE;
 				}
 			}
 		};
 
 	public:
 		Test_Responder(std::string uri, std::string reply) :
-			Service_Async(std::make_shared<Receiver>(*this, reply), uri)
+			Service(std::make_shared<Receiver>(*this, reply), uri)
 		{
 
 		}
@@ -80,7 +78,7 @@ namespace telling_test
 	};
 
 
-	class Test_Reflector : public Service_Async
+	class Test_Reflector : public Service
 	{
 	public:
 		class Receiver : public Reactor
@@ -93,7 +91,7 @@ namespace telling_test
 			Receiver(Test_Reflector &_service) : service(&_service) {}
 			~Receiver() {}
 
-			Directive recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
+			void recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
 			{
 				MsgView::Request req;
 				try
@@ -107,7 +105,7 @@ namespace telling_test
 				}
 
 				std::lock_guard g(mtx);
-				if (!service) return TERMINATE;
+				if (!service) return;
 
 				// Republish the pushed message
 				auto pub = WriteBulletin(service->uri);
@@ -124,16 +122,15 @@ namespace telling_test
 				}
 				else
 				{
+					// No need to respond to push message
 					++service->push_count;
-					
-					return CONTINUE;
 				}
 			}
 		};
 
 	public:
 		Test_Reflector(std::string uri) :
-			Service_Async(std::make_shared<Receiver>(*this), uri)
+			Service(std::make_shared<Receiver>(*this), uri)
 		{
 
 		}

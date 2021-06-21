@@ -3,76 +3,75 @@
 
 #include <deque>
 #include <mutex>
+#include <life_lock.h>
 #include "socket.h"
-#include "async.h"
+#include "async_loop.h"
 #include "async_queue.h"
 
 
 namespace telling
 {
-	namespace service
+	// Type hierarchy
+	using Publish_Pattern = Communicator::Pattern_Base<Role::SERVICE, Pattern::PUB_SUB>;
+	using Publish_Base    = Publish_Pattern;
+	class Publish;     // inherits Publish_Base
+	class Publish_Box; // inherits Publish
+
+	// Tag delivered to callbacks
+	using Publishing = TagSend<Publish>;
+
+	// Base class for Push handlers.
+	using AsyncPub     = AsyncSend<Publishing>;
+	using AsyncPublish = AsyncPub;
+
+
+	/*
+		Publish communicator that calls an AsyncSend delegate.
+			Push (AKA "Push_Outbox") includes a delegate suitable for most purposes.
+	*/
+	class Publish :
+		public    Publish_Base,
+		protected AsyncSendLoop<Publishing>
 	{
-		// Base type for Publish services.
-		using Pub_Base = Communicator::Pattern_Base<Role::SERVICE, Pattern::PUB_SUB>;
-
-
-		// Shorthand & longhand
-		using Publish_Base                   = Pub_Base;
-		class Pub_Async; using Publish_Async = Pub_Async;
-		class Pub_Box;   using Publish_Box   = Pub_Box;
-
+	public:
+		/*
+			Construct with an AsyncSend delegate.
+		*/
+		Publish(std::weak_ptr<AsyncPub> p = {})    : Publish_Base(),  AsyncSendLoop(socketView(),{this}) {initialize(p);}
+		Publish(
+			const Publish_Base     &s, // Shared socket
+			std::weak_ptr<AsyncPub> p = {})        : Publish_Base(s), AsyncSendLoop(socketView(),{this}) {initialize(p);}
+		~Publish() {}
 
 		/*
-			Publish communicator that calls an AsyncSend delegate.
-				Push (AKA "Push_Outbox") includes a delegate suitable for most purposes.
+			Initialize with the provided delegate
 		*/
-		class Pub_Async :
-			public    Pub_Base,
-			protected AsyncSend::Cycle
+		void initialize(std::weak_ptr<AsyncPub> p)    {AsyncSendLoop::send_init(p);}
+
+		/*
+			Attempt to push a message.  Throws nng::exception on failure.
+		*/
+		void publish(nng::msg &&msg)
 		{
-		public:
-			/*
-				Construct with an AsyncSend delegate.
-			*/
-			Pub_Async(std::weak_ptr<AsyncSend> p = {})                                  : Pub_Base(),            Cycle_(socketView()) {initialize(p);}
-			Pub_Async(const Pub_Base &shareSocket, std::weak_ptr<AsyncSend> p = {})     : Pub_Base(shareSocket), Cycle_(socketView()) {initialize(p);}
-			~Pub_Async() {}
+			if (!isReady()) throw nng::exception(nng::error::closed, "Publish Communicator is not ready.");
+			send_msg(std::move(msg));
+		}
+	};
 
-			/*
-				Initialize with the provided delegate
-			*/
-			void initialize(std::weak_ptr<AsyncSend> p)    {Cycle_::send_init(p);}
-
-			/*
-				Attempt to push a message.  Throws nng::exception on failure.
-			*/
-			void publish(nng::msg &&msg)
-			{
-				if (!isReady()) throw nng::exception(nng::error::closed, "Publish Communicator is not ready.");
-				send_msg(std::move(msg));
-			}
-		};
-
-		/*
-			A Publish communicator with a simple "outbox" queue.
-				This is appropriate whenever congestion is not an issue.
-		*/
-		class Pub_Box : public Pub_Async
-		{
-		public:
-			explicit Pub_Box()                      : Pub_Async()            {_init();}
-			Pub_Box(const Pub_Base &shareSocket)    : Pub_Async(shareSocket) {_init();}
-			~Pub_Box() {}
+	/*
+		A Publish communicator with a simple "outbox" queue.
+			This is appropriate whenever congestion is not an issue.
+	*/
+	class Publish_Box : public Publish
+	{
+	public:
+		explicit Publish_Box()                          : Publish()            {_init();}
+		Publish_Box(const Publish_Base &shareSocket)    : Publish(shareSocket) {_init();}
+		~Publish_Box() {}
 
 
-		protected:
-			void _init()    {initialize(_queue = std::make_shared<AsyncSendQueue>());}
-			std::shared_ptr<AsyncSendQueue> _queue;
-		};
-
-		/*
-			Publish_Outbox is so useful we just call it Publish.
-		*/
-		//using Publish = Publish_Box;
-	}
+	protected:
+		void _init()    {initialize(_queue.get_weak());}
+		edb::life_locked<AsyncSendQueue<Publishing>> _queue;
+	};
 }
