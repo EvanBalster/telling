@@ -52,13 +52,13 @@ namespace telling
 	{
 	public:
 		/*
-			Construct with an AsyncRecv delegate.
+			Construct with asynchronous I/O handler and optional socket-sharing.
 				Begins listening for messages immediately.
 		*/
-		Subscribe(std::weak_ptr<AsyncSub> p = {})    : Subscribe_Base(),  AsyncRecvLoop(make_ctx(),{this}) {initialize(p);}
-		Subscribe(
-			const Subscribe_Pattern &s, // Shared socket
-			std::weak_ptr<AsyncSub>  p = {})         : Subscribe_Base(s), AsyncRecvLoop(make_ctx(),{this}) {initialize(p);}
+		Subscribe()                                                         : Subscribe_Base(),       AsyncRecvLoop(make_ctx(),{this}) {}
+		Subscribe(std::weak_ptr<AsyncSub> p)                                : Subscribe() {initialize(p);}
+		Subscribe(const Subscribe_Pattern &shared)                          : Subscribe_Base(shared), AsyncRecvLoop(make_ctx(),{this}) {}
+		Subscribe(const Subscribe_Pattern &s, std::weak_ptr<AsyncSub> p)    : Subscribe(s) {initialize(p);}
 		~Subscribe() {}
 
 		/*

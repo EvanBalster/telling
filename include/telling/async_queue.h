@@ -1,6 +1,9 @@
 #pragma once
 
 
+#include <iostream>
+
+
 #include "io_queue.h"
 #include "async.h"
 
@@ -29,8 +32,8 @@ namespace telling
 
 		void async_prep(Tag tag, nng::msg &msg) override
 		{
-			if (SendQueueMtx::produce(std::move(msg))) return;
-			tag.send(std::move(msg));
+			if (!SendQueueMtx::produce(std::move(msg)))
+				tag.send(std::move(msg));
 		}
 
 		void async_sent(Tag tag) override

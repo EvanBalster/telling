@@ -15,8 +15,8 @@ Client_Box::~Client_Box()
 
 void Client::Handler::async_prep(Pushing push, nng::msg &msg)
 {
-	if (pushQueue.produce(std::move(msg))) return;
-	push.send(std::move(msg));
+	if (!pushQueue.produce(std::move(msg)))
+		push.send(std::move(msg));
 }
 void Client::Handler::async_sent(Pushing push)
 {

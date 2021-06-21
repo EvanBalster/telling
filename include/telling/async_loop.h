@@ -198,12 +198,13 @@ namespace telling
 		if (_delegate.lock())
 			throw nng::exception(nng::error::busy, "Receive start: already started");
 
-		if (auto delegate = new_delegate.lock())
-		{
-			_delegate = std::move(new_delegate);
-			delegate->async_start(_tag); // May throw
-			_ctx.recv(_aio);
-		}
+		auto delegate = new_delegate.lock();
+		if (!delegate)
+			throw nng::exception(nng::error::closed, "Receive start: delegate has expired");
+
+		_delegate = std::move(new_delegate);
+		delegate->async_start(_tag); // May throw
+		_ctx.recv(_aio);
 	}
 	template<typename Tag, typename T_RecvCtx>
 	void AsyncRecvLoop<Tag, T_RecvCtx>::recv_stop() noexcept
@@ -237,13 +238,14 @@ namespace telling
 	void AsyncSendLoop<Tag, T_SendCtx>::send_init(std::weak_ptr<Handler> new_delegate)
 	{
 		if (_delegate.lock())
-			throw nng::exception(nng::error::busy, "Send start: already started");
+			throw nng::exception(nng::error::busy, "Send init: already started");
 
-		if (auto delegate = new_delegate.lock())
-		{
-			_delegate = std::move(new_delegate);
-			delegate->async_start(_tag);
-		}
+		auto delegate = new_delegate.lock();
+		if (!delegate)
+			throw nng::exception(nng::error::closed, "Send init: delegate has expired");
+
+		_delegate = std::move(new_delegate);
+		delegate->async_start(_tag);
 	}
 
 	template<typename Tag, typename T_SendCtx>

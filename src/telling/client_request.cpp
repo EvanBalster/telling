@@ -73,13 +73,15 @@ Request::~Request()
 	}
 }
 
-void Request::initialize(std::weak_ptr<AsyncRequest> delegate)
+void Request::initialize(std::weak_ptr<AsyncRequest> new_delegate)
 {
 	if (_delegate.lock())
 		throw nng::exception(nng::error::busy, "Request::initialize (already initialized)");
 
-	if (delegate.lock())
-		_delegate = delegate;
+	if (!new_delegate.lock())
+		throw nng::exception(nng::error::closed, "Request::initialize (delegate is expired)");
+	
+	_delegate = new_delegate;
 }
 
 QueryID Request::request(nng::msg &&msg)

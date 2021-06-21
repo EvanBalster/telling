@@ -115,7 +115,7 @@ namespace telling
 			void async_recv (Subscribing, nng::msg&&) override;
 			void async_error(Subscribing, AsyncError) override;
 
-			edb::life_lock async_lifetime;
+			edb::life_lock_self async_lifetime;
 		}
 			publish;
 		
@@ -140,7 +140,7 @@ namespace telling
 			void async_recv (Pulling, nng::msg&&) override;
 			void async_error(Pulling, AsyncError) override;
 
-			edb::life_lock async_lifetime;
+			edb::life_lock_self async_lifetime;
 		}
 			pull;
 
@@ -190,7 +190,7 @@ namespace telling
 			static void run_device(ReqRep*);
 
 		protected:
-			edb::life_lock async_lifetime;
+			edb::life_lock_self async_lifetime;
 		}
 			reply;
 
@@ -351,7 +351,7 @@ namespace telling
 			static const char *Name()    {return "*services";}
 
 		protected:
-			edb::life_lock     async_lifetime;
+			edb::life_lock_self async_lifetime;
 		}
 			services;
 	};

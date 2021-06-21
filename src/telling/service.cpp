@@ -59,8 +59,8 @@ Service_Box::~Service_Box()
 
 void ServiceHandler::async_prep(Publishing pub, nng::msg &msg)
 {
-	if (publishQueue.produce(std::move(msg))) return;
-	pub.send(std::move(msg));
+	if (!publishQueue.produce(std::move(msg)))
+		pub.send(std::move(msg));
 }
 void ServiceHandler::async_sent(Publishing pub)
 {

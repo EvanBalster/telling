@@ -267,6 +267,7 @@ int main(int argc, char **argv)
 					}
 					bulletin.writeHeader("X-Republished-By", uri);
 					bulletin.writeData(req.body());
+					bulletin.writeData(" (republished)");
 					service.publish(bulletin.release());
 				}
 				catch (MsgException e)
@@ -491,6 +492,7 @@ int main(int argc, char **argv)
 			{
 			case 0:
 				// Push
+				msg.writeData("I'm getting pushy!");
 				cout << "CLI-PUSH send > `" << service_uri << "`";
 				if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
 				cout << endl;

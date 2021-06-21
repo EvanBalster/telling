@@ -33,12 +33,14 @@ namespace telling
 	class Reply : public Reply_Base
 	{
 	public:
-		Reply(std::weak_ptr<AsyncRep> p = {})    : Reply_Base()  {initialize(p);}
-		Reply(
-			const Reply_Base       &s, // Shared socket
-			std::weak_ptr<AsyncRep> p = {})      : Reply_Base(s) {initialize(p);}
+		/*
+			Construct with asynchronous I/O handler and optional socket-sharing.
+		*/
+		Reply()                                                     : Reply_Base() {}
+		Reply(std::weak_ptr<AsyncRep> p)                            : Reply() {initialize(p);}
+		Reply(const Reply_Pattern &shared)                          : Reply_Base(shared) {}
+		Reply(const Reply_Pattern &s, std::weak_ptr<AsyncRep> p)    : Reply(s) {initialize(p);}
 		~Reply();
-
 
 		/*
 			Provide a delegate for handling requests after construction.

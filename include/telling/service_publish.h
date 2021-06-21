@@ -35,12 +35,12 @@ namespace telling
 	{
 	public:
 		/*
-			Construct with an AsyncSend delegate.
+			Construct with asynchronous I/O handler and optional socket-sharing.
 		*/
-		Publish(std::weak_ptr<AsyncPub> p = {})    : Publish_Base(),  AsyncSendLoop(socketView(),{this}) {initialize(p);}
-		Publish(
-			const Publish_Base     &s, // Shared socket
-			std::weak_ptr<AsyncPub> p = {})        : Publish_Base(s), AsyncSendLoop(socketView(),{this}) {initialize(p);}
+		Publish()                                                       : Publish_Base(),       AsyncSendLoop(socketView(),{this}) {}
+		Publish(std::weak_ptr<AsyncPub> p)                              : Publish() {initialize(p);}
+		Publish(const Publish_Pattern &shared)                          : Publish_Base(shared), AsyncSendLoop(socketView(),{this}) {}
+		Publish(const Publish_Pattern &s, std::weak_ptr<AsyncPub> p)    : Publish(s) {initialize(p);}
 		~Publish() {}
 
 		/*

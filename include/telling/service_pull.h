@@ -35,13 +35,13 @@ namespace telling
 	{
 	public:
 		/*
-			Construct with an AsyncRecv delegate.
+			Construct with asynchronous I/O handler and optional socket-sharing.
 				Begins listening for messages immediately.
 		*/
-		Pull(std::weak_ptr<AsyncPull> p = {})    : Pull_Base(),  AsyncRecvLoop(socketView(),{this}) {initialize(p);}
-		Pull(
-			const Pull_Pattern      &s, // shared socket
-			std::weak_ptr<AsyncPull> p = {})     : Pull_Base(s), AsyncRecvLoop(socketView(),{this}) {initialize(p);}
+		Pull()                                                     : Pull_Base(),       AsyncRecvLoop(socketView(),{this}) {}
+		Pull(std::weak_ptr<AsyncPull> p)                           : Pull() {initialize(p);}
+		Pull(const Pull_Pattern &shared)                           : Pull_Base(shared), AsyncRecvLoop(socketView(),{this}) {}
+		Pull(const Pull_Pattern &s, std::weak_ptr<AsyncPull> p)    : Pull(s) {initialize(p);}
 		~Pull() {}
 
 		/*

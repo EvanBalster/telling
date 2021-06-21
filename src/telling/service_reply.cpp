@@ -9,14 +9,18 @@ using namespace telling;
 	Reply implementation
 */
 
-void Reply::initialize(std::weak_ptr<AsyncReply> delegate)
+void Reply::initialize(std::weak_ptr<AsyncReply> new_delegate)
 {
 	if (_delegate.lock())
-		throw nng::exception(nng::error::busy, "Request::initialize (already initialized)");
+		throw nng::exception(nng::error::busy, "Reply::initialize (already initialized)");
 
-	if (delegate.lock())
+	auto delegate = new_delegate.lock();
+	if (!delegate)
+		throw nng::exception(nng::error::closed, "Reply::initialize (delegate is expired)");
+
+	if (delegate)
 	{
-		_delegate = delegate;
+		_delegate = new_delegate;
 
 		ctx_aio_recv = make_ctx();
 
@@ -88,6 +92,13 @@ void Reply::_aioReceived(void *_comm)
 		cancel = true;
 		break;
 	}
+
+	if (!cancel)
+	{
+		// Create a new receive-context and receive another message.
+		ctx = comm->make_ctx();
+		ctx.recv(comm->aio_recv);
+	}
 }
 
 void Reply::respondTo(QueryID queryID, nng::msg &&msg)
@@ -95,22 +106,24 @@ void Reply::respondTo(QueryID queryID, nng::msg &&msg)
 	if (!isReady())
 		throw nng::exception(nng::error::closed, "Reply Communicator is not ready.");
 
-	// Make sure this queryID is awaiting a response
-	{
-		std::lock_guard g(unresponded_mtx);
-		if (unresponded.erase(queryID) == 0)
-			throw nng::exception(nng::error::inval,
-				"respondTo: no outstanding request with this queryID");
-	}
-
-	// Allow the delegate to prep the message
+	// Allow the delegate to prep or reject the message
 	if (auto delegate = _delegate.lock())
 	{
 		delegate->async_prep(Replying{this, queryID}, msg);
 	}
 	else
 	{
-		msg = nng::msg();
+		return;
+	}
+
+	if (!msg) return;
+
+	// Claim and erase the queryID
+	{
+		std::lock_guard g(unresponded_mtx);
+		if (unresponded.erase(queryID) == 0)
+			throw nng::exception(nng::error::inval,
+				"respondTo: no outstanding request with this queryID");
 	}
 
 	// Unpicle the NNG context and turn it over to sender.

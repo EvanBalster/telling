@@ -33,8 +33,8 @@ namespace telling
 	class Request_Base : public Request_Pattern
 	{
 	public:
-		Request_Base()                                   : Request_Pattern()           {}
-		Request_Base(const Request_Base &shareSocket)    : Request_Pattern(shareSocket) {}
+		Request_Base()                                      : Request_Pattern()           {}
+		Request_Base(const Request_Pattern &shareSocket)    : Request_Pattern(shareSocket) {}
 		~Request_Base() {}
 			
 
@@ -58,10 +58,13 @@ namespace telling
 	class Request : public Request_Base
 	{
 	public:
-		Request(std::weak_ptr<AsyncReq> p = {})    : Request_Base()  {initialize(p);}
-		Request(
-			const Request_Base     &s, // Shared socket
-			std::weak_ptr<AsyncReq> p = {})              : Request_Base(s) {initialize(p);}
+		/*
+			Construct with asynchronous I/O handler and optional socket-sharing.
+		*/
+		Request()                                                       : Request_Base() {}
+		Request(std::weak_ptr<AsyncReq> p)                              : Request() {initialize(p);}
+		Request(const Request_Pattern &shared)                          : Request_Base(shared) {}
+		Request(const Request_Pattern &s, std::weak_ptr<AsyncReq> p)    : Request(s) {initialize(p);}
 		~Request();
 
 		/*
