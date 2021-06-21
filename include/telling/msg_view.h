@@ -28,6 +28,9 @@ namespace telling
 			REPLY    = 0, // (don't change these integer values)
 			BULLETIN = 1, // (they're selected for a parsing trick)
 			REQUEST  = 2,
+
+			MASK_TYPE = 0x0F,
+			FLAG_HEADER_ONLY = 0x10,
 		};
 
 
@@ -120,22 +123,24 @@ namespace telling
 	{
 	public:
 		~Request() noexcept {}
-		Request() noexcept {}
-		Request(nng::msg_view msg) : MsgView(msg, TYPE::REQUEST) {}
+		Request()  noexcept {}
+		Request(nng::msg_view msg)     : MsgView(msg, TYPE::REQUEST) {}
 	};
+
 	class MsgView::Reply : public MsgView
 	{
 	public:
 		~Reply() noexcept {}
-		Reply() noexcept {}
-		Reply(nng::msg_view msg) : MsgView(msg, TYPE::REPLY) {}
+		Reply()  noexcept {}
+		Reply(nng::msg_view msg)       : MsgView(msg, TYPE::REPLY) {}
 	};
+
 	class MsgView::Bulletin : public MsgView
 	{
 	public:
 		~Bulletin() noexcept {}
-		Bulletin() noexcept {}
-		Bulletin(nng::msg_view msg) : MsgView(msg, TYPE::BULLETIN) {}
+		Bulletin()  noexcept {}
+		Bulletin(nng::msg_view msg)    : MsgView(msg, TYPE::BULLETIN) {}
 	};
 
 

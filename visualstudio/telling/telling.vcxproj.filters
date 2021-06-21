@@ -107,6 +107,9 @@
     <ClInclude Include="..\..\include\telling\service_base.h">
       <Filter>service</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg.h">
+      <Filter>msg</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\telling\client.cpp">

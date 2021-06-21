@@ -73,7 +73,7 @@ void Server::ReqRep::async_recv(ServiceReplying, nng::msg &&msg)
 	// Multiple instances of this call might be received concurrently.
 	//    AsyncSendQueue is mutexed...
 
-	server()->log << Name() << ": ...sending reply..." << std::endl;
+	//server()->log << Name() << ": ...sending reply..." << std::endl;
 
 	// Forward reply to proper client
 	try
@@ -98,7 +98,7 @@ void Server::ReqRep::async_recv(ClientRequesting, nng::msg &&msg)
 
 	auto status = server->services.routeRequest(request.uri(), std::move(msg));
 
-	server->log << Name() << ": routing to `" << request.uri() << "`" << std::endl;
+	//server->log << Name() << ": routing to `" << request.uri() << "`" << std::endl;
 
 	if (status.isSuccessful())
 	{

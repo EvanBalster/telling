@@ -23,7 +23,7 @@ Server::PushPull::~PushPull()
 
 void Server::PushPull::async_error(Pulling, AsyncError error)
 {
-	server()->log << Name() << ": ingestion error: " << error.what() << std::endl;
+	//server()->log << Name() << ": ingestion error: " << error.what() << std::endl;
 }
 
 void Server::PushPull::async_recv(Pulling, nng::msg &&msg)
@@ -36,7 +36,7 @@ void Server::PushPull::async_recv(Pulling, nng::msg &&msg)
 
 	auto status = server->services.routePush(request.uri(), std::move(msg));
 
-	server->log << Name() << ": pushing to URI `" << request.uri() << "`" << std::endl;
+	//server->log << Name() << ": pushing to URI `" << request.uri() << "`" << std::endl;
 
 	if (status.isSuccessful())
 	{

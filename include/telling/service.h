@@ -3,7 +3,7 @@
 #include <optional>
 
 #include "service_base.h"
-#include "msg_view.h"
+#include "msg.h"
 
 
 namespace telling
@@ -76,7 +76,7 @@ namespace telling
 		};
 
 		// Return value when Reactor intends to defer reply.
-		nng::msg NotImplemented();
+		nng::msg NotImplemented(UriView);
 
 
 		/*
@@ -94,24 +94,24 @@ namespace telling
 		*/
 
 		// Return the set of allowed methods.
-		virtual Methods  allowed() const noexcept = 0;
+		virtual Methods  allowed(UriView uri) const noexcept = 0;
 
 		// Safe methods (no PUSH support)
-		virtual void async_get    (Query q, const MsgView::Request &req, nng::msg &&msg) = 0;
-		virtual void async_head   (Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
-		virtual void async_trace  (Query q, const MsgView::Request &req, nng::msg &&msg);
-		virtual void async_options(Query q, const MsgView::Request &req, nng::msg &&msg);
+		virtual void async_get    (Query q, Msg::Request &&req) = 0;
+		virtual void async_head   (Query q, Msg::Request &&req)    {q.reply(NotImplemented(req.uri()));}
+		virtual void async_trace  (Query q, Msg::Request &&req);
+		virtual void async_options(Query q, Msg::Request &&req);
 
 		// Idempotent methods
-		virtual void async_put    (Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
-		virtual void async_delete (Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
+		virtual void async_put    (Query q, Msg::Request &&req)    {q.reply(NotImplemented(req.uri()));}
+		virtual void async_delete (Query q, Msg::Request &&req)    {q.reply(NotImplemented(req.uri()));}
 
 		// Other methods
-		virtual void async_patch  (Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
-		virtual void async_post   (Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
+		virtual void async_patch  (Query q, Msg::Request &&req)    {q.reply(NotImplemented(req.uri()));}
+		virtual void async_post   (Query q, Msg::Request &&req)    {q.reply(NotImplemented(req.uri()));}
 
 		// Undefined (as of HTTP/1.1) method names
-		virtual void async_UNKNOWN(Query q, const MsgView::Request &req, nng::msg &&msg)    {q.reply(NotImplemented());}
+		virtual void async_UNKNOWN(Query q, Msg::Request &&req)    {q.reply(NotImplemented(req.uri()));}
 
 
 	protected:
