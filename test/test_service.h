@@ -36,7 +36,7 @@ namespace telling_test
 				catch (MsgException e)
 				{
 					if (queryID) return DECLINE;
-					else         return e.writeReply("ServiceTest_Async");
+					else         return e.replyWithError("ServiceTest_Async");
 				}
 
 				std::lock_guard g(mtx);
@@ -102,7 +102,7 @@ namespace telling_test
 				catch (MsgException e)
 				{
 					if (queryID) return DECLINE;
-					else         return e.writeReply("ServiceTest_Async");
+					else         return e.replyWithError("ServiceTest_Async");
 				}
 
 				std::lock_guard g(mtx);

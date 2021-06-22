@@ -55,7 +55,6 @@ namespace telling
 	};
 
 
-
 	inline std::string Status::toString() const noexcept
 	{
 		int n = toInt();

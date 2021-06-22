@@ -231,7 +231,7 @@ int main(int argc, char **argv)
 	using namespace std::chrono_literals;
 	
 
-	auto service_thread = [](std::string uri, std::string reply_text, size_t lifetime_ms = 7500) -> void
+	auto run_service_thread = [](std::string uri, std::string reply_text, size_t lifetime_ms = 7500) -> void
 	{
 		unsigned timer = 0;
 		unsigned timerTotal = 0;
@@ -251,13 +251,11 @@ int main(int argc, char **argv)
 			while (service.pull(msg))
 			{
 				++recvCount;
-				cout << "SVC-PULL recv: ";
 				try
 				{
 					MsgView::Request req(msg);
 					//printStartLine(req);
 					//printHeaders(req);
-					cout << "[" << req.startLine() << "] `" << req.bodyString() << "` -- republishing with note" << endl;
 
 					// Re-publish the pulled message
 					auto bulletin = WriteBulletin(req.uri());
@@ -272,7 +270,7 @@ int main(int argc, char **argv)
 				}
 				catch (MsgException e)
 				{
-					cout << endl;
+					cout << "SVC-PULL recv" << endl;
 					cout << "\t...Error parsing message: " << e.what() << endl;
 					cout << "\t...  At location: `"
 						<< std::string_view(e.position, e.length) << '`' << endl;
@@ -298,13 +296,13 @@ int main(int argc, char **argv)
 				}
 				catch (MsgException e)
 				{
-					cout << endl;
+					cout << "SVC-REP recv" << endl;
 					cout << "\t...Error parsing message: " << e.what() << endl;
 					cout << "\t...  At location: `"
 						<< std::string_view(e.position, e.length) << '`' << endl;
 					cout << endl;
 
-					service.respond(e.writeReply("Test Service"));
+					service.respond(e.replyWithError("Test Service"));
 				}
 			}
 
@@ -325,9 +323,6 @@ int main(int argc, char **argv)
 				if (timer > 1000)
 				{
 					timer = 0;
-
-					cout << endl;
-					cout << "PUB send from service (heartbeat)" << endl;
 
 					auto bulletin = WriteBulletin(uri);
 					bulletin.writeHeader("Content-Type", "text/plain");
@@ -358,18 +353,20 @@ int main(int argc, char **argv)
 
 	std::string service_uri = "/voices";
 
-	
+
+
+	/*cout << "==== ...wait for service..." << endl;
+	std::this_thread::sleep_for(250ms);
+	cout << "==== ...wait for service..." << endl;
+	std::this_thread::sleep_for(250ms);*/
+
+
 	cout << "==== Starting service." << endl;
-	std::thread thread(service_thread, service_uri, "There are many voices to choose from.");
+	std::thread service_thread(run_service_thread, service_uri, "There are many voices to choose from.");
 
 
 
 	{
-		cout << "==== ...wait for service..." << endl;
-		std::this_thread::sleep_for(250ms);
-		cout << "==== ...wait for service..." << endl;
-		std::this_thread::sleep_for(250ms);
-
 		cout << "==== Creating client." << endl;
 
 		Client_Box client;
@@ -523,7 +520,7 @@ int main(int argc, char **argv)
 	cout << endl;
 	
 	cout << "==== Join service thread." << endl;
-	thread.join();
+	service_thread.join();
 	cout << "==== Joined service thread." << endl;
 	cout << endl;
 

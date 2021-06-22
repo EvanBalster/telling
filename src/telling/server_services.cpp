@@ -20,7 +20,7 @@ Server::Services::Services()
 	register_reply.listen(server()->address_register);
 
 	// Publish service events
-	publish_events.listen(server()->address_register);
+	publish_events.dial(server()->address_internal);
 
 
 
@@ -71,7 +71,7 @@ void Server::Services::async_recv(Replying rep, nng::msg &&_msg)
 	{
 		log << Name() << ": message parse exception: " << e.what() << std::endl;
 
-		rep.send(e.writeReply("Service Registration Request Handler"));
+		rep.send(e.replyWithError("Service Registry"));
 		return;
 	}
 
@@ -232,7 +232,7 @@ void Server::Services::run_management_thread()
 			/*
 				Create service sockets and dial the service.
 			*/
-			log << Name() << ": enrolling `" << spec.map_uri << "`...";
+			log << Name() << ": registering service `" << spec.map_uri << "`...";
 
 			try
 			{
@@ -273,7 +273,7 @@ void Server::Services::run_management_thread()
 			notify.writeData("\nEnrolled with this URI.");
 			register_reply.respondTo(spec.queryID, notify.release());
 
-			// Publish existence of new service?
+			// Publish existence of new service
 			auto bulletin = WriteBulletin("*services", StatusCode::Created);
 			bulletin.writeData(spec.map_uri);
 			publish_events.publish(bulletin.release());

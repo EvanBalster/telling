@@ -40,14 +40,14 @@ MsgWriter::MsgWriter(MsgProtocol _protocol) :
 
 void MsgWriter::_startMsg()
 {
-	if (msg) throw MsgException(MsgError::OUT_OF_ORDER, 0, 0);
+	if (msg) throw MsgException(MsgError::ALREADY_WRITTEN, 0, 0);
 	*this = MsgWriter(protocol);
 	msg = nng::make_msg(0);
 }
 
 void MsgWriter::_autoCloseHeaders()
 {
-	if (!msg) throw MsgException(MsgError::OUT_OF_ORDER, 0, 0);
+	if (!msg) throw MsgException(MsgError::ALREADY_WRITTEN, 0, 0);
 	if (!dataOffset)
 	{
 		// End headers
@@ -129,7 +129,7 @@ void MsgWriter::startBulletin(std::string_view uri, Status status, std::string_v
 void MsgWriter::writeHeader(std::string_view name, std::string_view value)
 {
 	if (!msg || dataOffset)
-		throw MsgException(MsgError::OUT_OF_ORDER, 0, 0);
+		throw MsgException(MsgError::ALREADY_WRITTEN, 0, 0);
 
 	for (auto c : name) if (c == '\r' || c == '\n' || c == ':')
 		throw MsgException(MsgError::HEADER_MALFORMED, 0, 0);
