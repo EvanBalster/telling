@@ -4,6 +4,7 @@
 #include <telling/msg_view.h>
 #include <telling/msg_writer.h>
 #include <telling/service.h>
+#include <telling/service_reactor.h>
 
 
 namespace telling_test

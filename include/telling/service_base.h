@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 
 #include "service_registration.h"
 
@@ -69,10 +70,10 @@ namespace telling
 		public Socket::PipeEventHandler
 	{
 	public:
-		using QueryID   = telling::QueryID;
+		using QueryID = telling::QueryID;
 
 	public:
-		virtual ~ServiceHandler_Base() {}
+		~ServiceHandler_Base() override {}
 	};
 
 
@@ -83,25 +84,23 @@ namespace telling
 	class ServiceHandler : public ServiceHandler_Base
 	{
 	public:
-		virtual ~ServiceHandler() {}
+		using AsyncError = telling::AsyncError;
+		using Replying   = telling::Replying;
+		using Publishing = telling::Publishing;
+		using Pulling    = telling::Pulling;
+
+
+	public:
+		~ServiceHandler() override {}
 
 
 	protected:
 		// Receive a pull message.
-		// There is no method for replying.
-		/*
-		void async_recv (Pulling, nng::msg &&request) = 0;
-		*/
+		// void async_recv (Pulling, nng::msg &&request) -- REQUIRED
 		virtual void async_error(Pulling, AsyncError)       {}
 
-		// Receive a request.
-		// May respond immediately (return a msg) or later (via respondTo).
-		/*
-		void async_recv (Replying, nng::msg &&request) = 0;
-		*/
-
-		// Reply processing status (optional).
-		// reply_error may be also be triggered if there is some error receiving a request.
+		// Request / Reply processing.
+		// void async_recv (Replying, nng::msg &&request) -- REQUIRED
 		void async_prep (Replying, nng::msg &)   override    {}
 		void async_sent (Replying)               override    {}
 		void async_error(Replying, AsyncError)   override    {}

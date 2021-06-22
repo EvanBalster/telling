@@ -110,6 +110,12 @@
     <ClInclude Include="..\..\include\telling\msg.h">
       <Filter>msg</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\include\telling\service_reactor.h">
+      <Filter>service</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\client_base.h">
+      <Filter>client</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\telling\client.cpp">
@@ -159,6 +165,9 @@
     </ClCompile>
     <ClCompile Include="..\..\src\telling\http_client.cpp">
       <Filter>http</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\service_reactor.cpp">
+      <Filter>service</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

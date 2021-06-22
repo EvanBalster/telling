@@ -13,12 +13,12 @@ Client_Box::~Client_Box()
 }
 
 
-void Client::Handler::async_prep(Pushing push, nng::msg &msg)
+void ClientHandler::async_prep(Pushing push, nng::msg &msg)
 {
 	if (!pushQueue.produce(std::move(msg)))
 		push.send(std::move(msg));
 }
-void Client::Handler::async_sent(Pushing push)
+void ClientHandler::async_sent(Pushing push)
 {
 	this->push_sent();
 
@@ -27,7 +27,7 @@ void Client::Handler::async_sent(Pushing push)
 }
 
 
-Client::Client(std::weak_ptr<Handler> _handler) :
+Client::Client(std::weak_ptr<ClientHandler_Base> _handler) :
 	//handler(std::move(_handler)),
 	_requester (_handler),
 	_subscriber(_handler),

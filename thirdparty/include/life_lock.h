@@ -227,7 +227,7 @@ namespace edb
 		};
 		shared_ref _ref = shared_ref();
 		std::atomic_flag &_lock() noexcept    {return reinterpret_cast<std::atomic_flag&>(_ref);}
-
+		
 		// Prevent implicit copying of life_lock.
 		//    life_lock holds a shared reference and thus blocks destruction of its clones.
 		//    TODO consider an explicit cloning method for careful multithreaded use.
