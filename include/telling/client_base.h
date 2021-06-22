@@ -7,12 +7,6 @@
 
 namespace telling
 {
-	using AsyncError = telling::AsyncError;
-	using Pulling    = telling::Pulling;
-	using Replying   = telling::Replying;
-	using Publishing = telling::Publishing;
-
-
 	/*
 		Base class for Clients which may support all three messaging patterns.
 	*/

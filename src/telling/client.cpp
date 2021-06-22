@@ -20,8 +20,6 @@ void ClientHandler::async_prep(Pushing push, nng::msg &msg)
 }
 void ClientHandler::async_sent(Pushing push)
 {
-	this->push_sent();
-
 	nng::msg next;
 	if (pushQueue.consume(next)) push.send(std::move(next));
 }
