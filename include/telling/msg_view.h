@@ -59,7 +59,7 @@ namespace telling
 		*/
 
 		Method            method        () const noexcept    {return Method     ::Parse(methodString());}
-		UriView           uri           () const noexcept    {return _string(_uri);}
+		UriView           uri           () const noexcept    {return UriView(_string(_uri));}
 		MsgProtocol       protocol      () const noexcept    {return MsgProtocol::Parse(protocolString());}
 		Status            status        () const noexcept    {return Status     ::Parse(statusString());}
 		std::string_view  reason        () const noexcept    {return _string(_reason);}
@@ -112,10 +112,11 @@ namespace telling
 	private:
 		void _parse_msg();
 
-		nng::view        _view  (size_t start, size_t length) const noexcept    {return nng::       view(msg.body().data<char>()+start, length);}
-		nng::view        _view  (HeadRange b)                 const noexcept    {return nng::       view(msg.body().data<char>()+b.start, b.length);}
-		std::string_view _string(size_t start, size_t length) const noexcept    {return std::string_view(msg.body().data<char>()+start, length);}
-		std::string_view _string(HeadRange b)                 const noexcept    {return std::string_view(msg.body().data<char>()+b.start, b.length);}
+		const char      *_raw   ()                            const noexcept    {return msg.body().data<char>();}
+		nng::view        _view  (size_t start, size_t length) const noexcept    {return nng::       view(_raw()+start, length);}
+		nng::view        _view  (HeadRange b)                 const noexcept    {return nng::       view(_raw()+b.start, b.length);}
+		std::string_view _string(size_t start, size_t length) const noexcept    {return std::string_view(_raw()+start, length);}
+		std::string_view _string(HeadRange b)                 const noexcept    {return std::string_view(_raw()+b.start, b.length);}
 	};
 
 

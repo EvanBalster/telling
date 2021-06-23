@@ -8,7 +8,6 @@
 #include <string>
 #include <string_view>
 #include <map>
-#include <robin_hood.h>
 #include <nngpp/nngpp.h>
 #include <tsl/htrie_map.h>
 #include <life_lock.h>
@@ -20,18 +19,17 @@
 #include "socket.h"
 
 #include "service_pull.h"
-#include "client_push.h"
 #include "service_publish.h"
-#include "client_subscribe.h"
 #include "service_reply.h"
+#include "service.h"
+
+#include "client_push.h"
+#include "client_subscribe.h"
 #include "service_registration.h"
 
 
 namespace telling
 {
-	template<typename value_type>
-	using Dictionary = robin_hood::unordered_flat_map<std::string, value_type>;
-
 	template<typename value_type>
 	using PrefixMap = tsl::htrie_map<char, value_type>;
 

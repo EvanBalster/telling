@@ -28,7 +28,7 @@ namespace telling
 	namespace status_exceptions
 	{
 		template<StatusCode CODE>
-		class Err_
+		class Err_ : public ReplyableException
 		{
 		public:
 			const std::string message;
@@ -55,15 +55,15 @@ namespace telling
 		using Gone             = Err_<StatusCode::Gone>;
 		using LengthRequired   = Err_<StatusCode::LengthRequired>;
 
-		using PayloadTooLarge             = Err_<StatusCode::PayloadTooLarge>;
-		using URITooLong                  = Err_<StatusCode::URITooLong>;
-		using UnsupportedMediaType        = Err_<StatusCode::UnsupportedMediaType>;
-		using RangeNotSatisfiable         = Err_<StatusCode::RangeNotSatisfiable>;
+		using PayloadTooLarge      = Err_<StatusCode::PayloadTooLarge>;
+		using URITooLong           = Err_<StatusCode::URITooLong>;
+		using UnsupportedMediaType = Err_<StatusCode::UnsupportedMediaType>;
+		using RangeNotSatisfiable  = Err_<StatusCode::RangeNotSatisfiable>;
 
-		using UnprocessableEntity         = Err_<StatusCode::UnprocessableEntity>;
-		using Locked                      = Err_<StatusCode::Locked>;
-		using FailedDependency            = Err_<StatusCode::FailedDependency>;
-		using TooManyRequests             = Err_<StatusCode::TooManyRequests>;
+		using UnprocessableEntity  = Err_<StatusCode::UnprocessableEntity>;
+		using Locked               = Err_<StatusCode::Locked>;
+		using FailedDependency     = Err_<StatusCode::FailedDependency>;
+		using TooManyRequests      = Err_<StatusCode::TooManyRequests>;
 		using RequestHeaderFieldsTooLarge = Err_<StatusCode::RequestHeaderFieldsTooLarge>;
 
 		// 500 series
@@ -79,6 +79,11 @@ namespace telling
 		using LoopDetected            = Err_<StatusCode::LoopDetected>;
 		using NotExtended             = Err_<StatusCode::NotExtended>;
 		using NetworkAuthenticationRequired = Err_<StatusCode::NetworkAuthenticationRequired>;
+
+		// Shorthands
+		using InternalError          = InternalServerError;
+		using AuthenticationRequired = NetworkAuthenticationRequired;
+		using HeaderTooLarge         = RequestHeaderFieldsTooLarge;
 		
 	}
 

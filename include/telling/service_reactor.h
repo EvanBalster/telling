@@ -24,7 +24,7 @@ namespace telling
 
 
 	public:
-		Reactor(std::string_view uri_prefix);
+		Reactor(UriView uri_prefix);
 		virtual ~Reactor() {}
 
 
@@ -57,7 +57,7 @@ namespace telling
 		*/
 
 		// Return the set of allowed methods.
-		virtual Methods  allowed(UriView uri) const noexcept = 0;
+		virtual Methods allowed(UriView uri) const noexcept = 0;
 
 		// Safe methods (no PUSH support)
 		virtual void async_get    (Query q, Msg::Request &&req) = 0;
@@ -83,7 +83,7 @@ namespace telling
 		void async_recv(Pulling,      nng::msg &&request) override    {_handle(Query{0},                std::move(request));}
 		void async_recv(Replying rep, nng::msg &&request) override    {_handle(Query{rep.id, rep.send}, std::move(request));}
 
-		std::string   _reactor_uri_prefix;
-		std::mutex    _reactor_mutex;
+		Uri        _uri_prefix;
+		std::mutex _reactor_mutex;
 	};
 }

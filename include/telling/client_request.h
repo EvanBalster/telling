@@ -5,7 +5,6 @@
 #include <mutex>
 #include <future>
 #include <life_lock.h>
-#include <robin_hood.h>
 #include <unordered_set>
 #include "socket.h"
 

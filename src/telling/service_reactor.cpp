@@ -5,12 +5,22 @@
 using namespace telling;
 
 
+Reactor::Reactor(UriView uri_prefix) :
+	_uri_prefix(uri_prefix)
+{
+}
+
 void Reactor::_handle(Query query, nng::msg &&_msg)
 {
 	try
 	{
 		Msg::Request request = Msg::Request(std::move(_msg));
 		Method       method = request.method();
+
+		// Prefix check
+		if (!request.uri().hasPrefix(_uri_prefix))
+			throw status_exceptions::BadGateway(_uri_prefix);
+
 
 		std::lock_guard g(_reactor_mutex);
 
@@ -44,7 +54,7 @@ void Reactor::_handle(Query query, nng::msg &&_msg)
 	{
 		if (query.reply)
 		{
-			query.reply(ex.replyWithError(_reactor_uri_prefix));
+			query.reply(ex.replyWithError(_uri_prefix));
 		}
 
 		// TODO logging?
@@ -57,7 +67,7 @@ void Reactor::_handle(Query query, nng::msg &&_msg)
 			msg.writeHeader("Content-Type", "text/plain");
 
 			msg.writeData("NNG exception in `");
-			msg.writeData(_reactor_uri_prefix);
+			msg.writeData(_uri_prefix);
 			msg.writeData("`:\r\n\t");
 			msg.writeData(ex.what());
 			msg.writeData(" -- ");
@@ -76,7 +86,7 @@ void Reactor::_handle(Query query, nng::msg &&_msg)
 			msg.writeHeader("Content-Type", "text/plain");
 
 			msg.writeData("C++ exception in `");
-			msg.writeData(_reactor_uri_prefix);
+			msg.writeData(_uri_prefix);
 			msg.writeData("`:\r\n\t");
 			msg.writeData(ex.what());
 
