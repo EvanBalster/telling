@@ -98,10 +98,10 @@ Registration::~Registration()
 
 Registration::STATUS Registration::status() const noexcept
 {
-	return static_cast<Delegate*>(&*delegate)->status;
+	return delegate->status;
 }
 
 const nng::exception &Registration::exception() const noexcept
 {
-	return static_cast<Delegate*>(&*delegate)->except;
+	return delegate->except;
 }

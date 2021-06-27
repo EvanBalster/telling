@@ -100,7 +100,7 @@ QueryID HttpClient::request(nng::msg &&req)
 {
 	auto handler = this->_handler.lock();
 	if (!handler)
-		throw nng::exception(nng::error::exist, "Request communicator has no delegate to handle messages");
+		throw nng::exception(nng::error::exist, "Request communicator has no message handler");
 
 	std::lock_guard<std::mutex> lock(mtx);
 

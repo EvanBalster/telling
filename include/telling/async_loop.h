@@ -26,13 +26,13 @@ namespace telling
 		T_RecvCtx       &recv_ctx()       noexcept    {return _ctx;}
 		const T_RecvCtx &recv_ctx() const noexcept    {return _ctx;}
 
-		std::weak_ptr<Handler> recv_delegate() const    {return _delegate;}
+		std::weak_ptr<Handler> recv_handler() const    {return _handler;}
 
 	private:
 		Tag                    _tag; // TODO [[no_unique_address]]
 		nng::aio               _aio;
 		T_RecvCtx              _ctx;
-		std::weak_ptr<Handler> _delegate;
+		std::weak_ptr<Handler> _handler;
 	};
 
 	/*
@@ -49,7 +49,7 @@ namespace telling
 		~AsyncSendLoop();
 
 		/*
-			send_msg may throw an exception if the delegate refuses.
+			send_msg may throw an exception if the handler refuses.
 				send_stop halts sending.
 		*/
 		void send_init(std::weak_ptr<Handler>);
@@ -59,13 +59,13 @@ namespace telling
 		T_SendCtx       &send_ctx()       noexcept    {return _ctx;}
 		const T_SendCtx &send_ctx() const noexcept    {return _ctx;}
 
-		std::weak_ptr<Handler> send_delegate() const    {return _delegate;}
+		std::weak_ptr<Handler> send_handler() const    {return _handler;}
 
 	private:
 		Tag                    _tag; // TODO [[no_unique_address]]
 		nng::aio               _aio;
 		T_SendCtx              _ctx;
-		std::weak_ptr<Handler> _delegate;
+		std::weak_ptr<Handler> _handler;
 	};
 
 
@@ -78,20 +78,20 @@ namespace telling
 			auto Member_tag,
 			auto Member_aio,
 			auto Member_ctx,
-			auto Member_delegate, typename T_Self>
+			auto Member_handler, typename T_Self>
 		void AsyncRecv_Callback_Self(void *_self)
 		{
 			auto *self = static_cast<T_Self*>(_self);
 			auto       &tag      =  self->*Member_tag;
 			nng::aio   &aio      =  self->*Member_aio;
 			auto       &ctx      =  self->*Member_ctx;
-			const auto  delegate = (self->*Member_delegate).lock();
+			const auto  handler = (self->*Member_handler).lock();
 
 			nng::error aioResult = aio.result();
 
-			if (!delegate)
+			if (!handler)
 			{
-				// Stop receiving if there is no delegate.
+				// Stop receiving if there is no handler.
 				if (aioResult == nng::error::success) aio.release_msg();
 				return;
 			}
@@ -102,19 +102,19 @@ namespace telling
 			{
 			case nng::error::success:
 				// Receive and continue
-				delegate->async_recv(tag, aio.release_msg());
+				handler->async_recv(tag, aio.release_msg());
 				break;
 
 			case nng::error::timedout:
 				// Note error and continue
-				delegate->async_error(tag, aioResult);
+				handler->async_error(tag, aioResult);
 				break;
 
 			case nng::error::canceled:
 			default:
 				// Cease receiving
-				delegate->async_error(tag, aioResult);
-				delegate->async_stop(tag, aioResult);
+				handler->async_error(tag, aioResult);
+				handler->async_stop(tag, aioResult);
 				return;
 			}
 
@@ -127,7 +127,7 @@ namespace telling
 			auto Member_tag,
 			auto Member_aio,
 			auto Member_ctx,
-			auto Member_delegate,
+			auto Member_handler,
 			typename T_Self>
 		void AsyncSend_Callback_Self(void *_self)
 		{
@@ -135,13 +135,13 @@ namespace telling
 			auto        tag      =  self->*Member_tag;
 			nng::aio   &aio      =  self->*Member_aio;
 			auto       &ctx      =  self->*Member_ctx;
-			const auto  delegate = (self->*Member_delegate).lock();
+			const auto  handler = (self->*Member_handler).lock();
 
 			nng::error aioResult = aio.result();
 
-			if (!delegate)
+			if (!handler)
 			{
-				// Stop sending if there is no delegate.
+				// Stop sending if there is no handler.
 				return;
 			}
 
@@ -151,18 +151,18 @@ namespace telling
 			{
 			case nng::error::success:
 				tag.send.setDest(nextMsg);
-				delegate->async_sent (tag);
+				handler->async_sent (tag);
 				break;
 
 			default:
 			case nng::error::timedout:
 				tag.send.setDest(nextMsg);
-				delegate->async_error(tag, aioResult);
+				handler->async_error(tag, aioResult);
 				break;
 
 			case nng::error::canceled:
 				// Cannot send another message
-				delegate->async_error(tag, aioResult);
+				handler->async_error(tag, aioResult);
 				return;
 			}
 
@@ -183,7 +183,7 @@ namespace telling
 			&AsyncRecvLoop::_tag,
 			&AsyncRecvLoop::_aio,
 			&AsyncRecvLoop::_ctx,
-			&AsyncRecvLoop::_delegate,
+			&AsyncRecvLoop::_handler,
 			AsyncRecvLoop>, this);
 	}
 	template<typename Tag, typename T_RecvCtx>
@@ -193,25 +193,25 @@ namespace telling
 	}
 
 	template<typename Tag, typename T_RecvCtx>
-	void AsyncRecvLoop<Tag, T_RecvCtx>::recv_start(std::weak_ptr<Handler> new_delegate)
+	void AsyncRecvLoop<Tag, T_RecvCtx>::recv_start(std::weak_ptr<Handler> new_handler)
 	{
-		if (_delegate.lock())
+		if (_handler.lock())
 			throw nng::exception(nng::error::busy, "Receive start: already started");
 
-		auto delegate = new_delegate.lock();
-		if (!delegate)
-			throw nng::exception(nng::error::closed, "Receive start: delegate has expired");
+		auto handler = new_handler.lock();
+		if (!handler)
+			throw nng::exception(nng::error::closed, "Receive start: handler has expired");
 
-		_delegate = std::move(new_delegate);
-		delegate->async_start(_tag); // May throw
+		_handler = std::move(new_handler);
+		handler->async_start(_tag); // May throw
 		_ctx.recv(_aio);
 	}
 	template<typename Tag, typename T_RecvCtx>
 	void AsyncRecvLoop<Tag, T_RecvCtx>::recv_stop() noexcept
 	{
 		_aio.stop();
-		if (auto delegate = _delegate.lock())
-			delegate->async_stop(_tag, nng::error::success);
+		if (auto handler = _handler.lock())
+			handler->async_stop(_tag, nng::error::success);
 	}
 
 
@@ -223,42 +223,42 @@ namespace telling
 			&AsyncSendLoop::_tag,
 			&AsyncSendLoop::_aio,
 			&AsyncSendLoop::_ctx,
-			&AsyncSendLoop::_delegate,
+			&AsyncSendLoop::_handler,
 			AsyncSendLoop>, this);
 	}
 	template<typename Tag, typename T_SendCtx>
 	AsyncSendLoop<Tag, T_SendCtx>::~AsyncSendLoop()
 	{
 		_aio.stop();
-		if (auto delegate = _delegate.lock())
-			delegate->async_stop(_tag, nng::error::success);
+		if (auto handler = _handler.lock())
+			handler->async_stop(_tag, nng::error::success);
 	}
 
 	template<typename Tag, typename T_SendCtx>
-	void AsyncSendLoop<Tag, T_SendCtx>::send_init(std::weak_ptr<Handler> new_delegate)
+	void AsyncSendLoop<Tag, T_SendCtx>::send_init(std::weak_ptr<Handler> new_handler)
 	{
-		if (_delegate.lock())
+		if (_handler.lock())
 			throw nng::exception(nng::error::busy, "Send init: already started");
 
-		auto delegate = new_delegate.lock();
-		if (!delegate)
-			throw nng::exception(nng::error::closed, "Send init: delegate has expired");
+		auto handler = new_handler.lock();
+		if (!handler)
+			throw nng::exception(nng::error::closed, "Send init: handler has expired");
 
-		_delegate = std::move(new_delegate);
-		delegate->async_start(_tag);
+		_handler = std::move(new_handler);
+		handler->async_start(_tag);
 	}
 
 	template<typename Tag, typename T_SendCtx>
 	void AsyncSendLoop<Tag, T_SendCtx>::send_msg(nng::msg &&msg)
 	{
-		auto delegate = _delegate.lock();
+		auto handler = _handler.lock();
 
-		if (!delegate) throw nng::exception(nng::error::exist,
+		if (!handler) throw nng::exception(nng::error::exist,
 			"AsyncSendLoop::send_msg: handler does not exist");
 
 		auto tag = _tag;
 		tag.send.setDest(msg); // Aliasing...
-		delegate->async_prep(_tag, msg);
+		handler->async_prep(_tag, msg);
 
 		if (msg)
 		{

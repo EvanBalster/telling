@@ -28,7 +28,7 @@ namespace telling
 
 
 	/*
-		Reply communicator that calls an AsyncRespond delegate.
+		Reply communicator that calls an AsyncReply handler.
 	*/
 	class Reply : public Reply_Base
 	{
@@ -43,8 +43,8 @@ namespace telling
 		~Reply();
 
 		/*
-			Provide a delegate for handling requests after construction.
-				Throws nng::exception if a delegate has already been installed.
+			Provide a handler for handling requests after construction.
+				Throws nng::exception if a handler has already been installed.
 		*/
 		void initialize(std::weak_ptr<AsyncRep>);
 
@@ -56,7 +56,7 @@ namespace telling
 
 
 	protected:
-		std::weak_ptr<AsyncRep> _delegate;
+		std::weak_ptr<AsyncRep> _handler;
 
 		struct OutboxItem
 		{

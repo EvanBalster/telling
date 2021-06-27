@@ -9,18 +9,18 @@ using namespace telling;
 	Reply implementation
 */
 
-void Reply::initialize(std::weak_ptr<AsyncReply> new_delegate)
+void Reply::initialize(std::weak_ptr<AsyncReply> new_handler)
 {
-	if (_delegate.lock())
+	if (_handler.lock())
 		throw nng::exception(nng::error::busy, "Reply::initialize (already initialized)");
 
-	auto delegate = new_delegate.lock();
-	if (!delegate)
-		throw nng::exception(nng::error::closed, "Reply::initialize (delegate is expired)");
+	auto handler = new_handler.lock();
+	if (!handler)
+		throw nng::exception(nng::error::closed, "Reply::initialize (handler is expired)");
 
-	if (delegate)
+	if (handler)
 	{
-		_delegate = new_delegate;
+		_handler = new_handler;
 
 		ctx_aio_recv = make_ctx();
 
@@ -48,15 +48,15 @@ void Reply::_aioReceived(void *_comm)
 	auto comm = static_cast<Reply*>(_comm);
 	auto &ctx = comm->ctx_aio_recv;
 	auto queryID = ctx.get().id;
-	auto delegate = comm->_delegate.lock();
+	auto handler = comm->_handler.lock();
 
 	bool cancel = false;
 
-	// Call delegate
+	// Call handler
 	auto error = comm->aio_recv.result();
-	if (!delegate)
+	if (!handler)
 	{
-		// No delegate; terminate
+		// No handler; terminate
 		comm->aio_recv.release_msg();
 		cancel = true;
 	}
@@ -73,7 +73,7 @@ void Reply::_aioReceived(void *_comm)
 
 			// Deliver asynchronous event...
 			nng::msg responseMsg;
-			delegate->async_recv(
+			handler->async_recv(
 				Replying{comm, queryID, {&responseMsg}},
 				std::move(comm->aio_recv.release_msg()));
 
@@ -87,7 +87,7 @@ void Reply::_aioReceived(void *_comm)
 	case nng::error::canceled:
 	case nng::error::timedout:
 	default:
-		delegate->async_error(
+		handler->async_error(
 			Replying{comm, ctx.get().id}, error);
 		cancel = true;
 		break;
@@ -106,10 +106,10 @@ void Reply::respondTo(QueryID queryID, nng::msg &&msg)
 	if (!isReady())
 		throw nng::exception(nng::error::closed, "Reply Communicator is not ready.");
 
-	// Allow the delegate to prep or reject the message
-	if (auto delegate = _delegate.lock())
+	// Allow the handler to prep or reject the message
+	if (auto handler = _handler.lock())
 	{
-		delegate->async_prep(Replying{this, queryID}, msg);
+		handler->async_prep(Replying{this, queryID}, msg);
 	}
 	else
 	{
@@ -147,7 +147,7 @@ void Reply::respondTo(QueryID queryID, nng::msg &&msg)
 void Reply::_aioSent(void *_comm)
 {
 	auto comm = static_cast<Reply*>(_comm);
-	auto delegate = comm->_delegate.lock();
+	auto handler = comm->_handler.lock();
 
 	// Halt?
 	switch (comm->aio_send.result())
@@ -159,7 +159,7 @@ void Reply::_aioSent(void *_comm)
 	}
 
 	QueryID queryID = comm->ctx_aio_send.get().id;
-	delegate->async_sent(Replying{comm, queryID});
+	handler->async_sent(Replying{comm, queryID});
 
 	{
 		OutboxItem next;

@@ -26,8 +26,8 @@ namespace telling
 
 
 	/*
-		Publish communicator that calls an AsyncSend delegate.
-			Push (AKA "Push_Outbox") includes a delegate suitable for most purposes.
+		Publish communicator that calls an AsyncPublish handler.
+			Publish_Box requires no handler.
 	*/
 	class Publish :
 		public    Publish_Base,
@@ -44,7 +44,7 @@ namespace telling
 		~Publish() {}
 
 		/*
-			Initialize with the provided delegate
+			Initialize with the provided handler
 		*/
 		void initialize(std::weak_ptr<AsyncPub> p)    {AsyncSendLoop::send_init(p);}
 

@@ -42,7 +42,7 @@ namespace telling
 
 	public:
 		class Delegate;
-		std::shared_ptr<AsyncRequest> delegate;
-		Request                       requester;
+		std::shared_ptr<Delegate> delegate;
+		Request                   requester;
 	};
 }

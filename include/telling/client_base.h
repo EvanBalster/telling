@@ -71,7 +71,7 @@ namespace telling
 
 
 	/*
-		Asynchronous events are delivered to a delegate object.
+		Asynchronous events are delivered to a handler object.
 	*/
 	class ClientHandler :
 		public ClientHandler_Base

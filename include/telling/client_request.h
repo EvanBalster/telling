@@ -52,7 +52,7 @@ namespace telling
 
 
 	/*
-		Request communicator that calls an AsyncQuery delegate.
+		Request communicator that calls an AsyncRequest handler.
 	*/
 	class Request : public Request_Base
 	{
@@ -67,8 +67,8 @@ namespace telling
 		~Request();
 
 		/*
-			Provide a delegate for handling requests after construction.
-				Throws nng::exception if a delegate has already been installed.
+			Provide a handler for handling requests after construction.
+				Throws nng::exception if a handler has already been installed.
 		*/
 		void initialize(std::weak_ptr<AsyncReq>);
 
@@ -86,7 +86,7 @@ namespace telling
 
 
 	protected:
-		std::weak_ptr<AsyncReq> _delegate;
+		std::weak_ptr<AsyncReq> _handler;
 
 		enum ACTION_STATE
 		{

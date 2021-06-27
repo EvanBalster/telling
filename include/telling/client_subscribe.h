@@ -44,7 +44,7 @@ namespace telling
 
 
 	/*
-		Subscribe communicator that calls an AsyncRecv delegate.
+		Subscribe communicator that calls an AsyncRecv handler.
 	*/
 	class Subscribe :
 		public    Subscribe_Base,
@@ -62,7 +62,7 @@ namespace telling
 		~Subscribe() {}
 
 		/*
-			Start receiving through the provided delegate.
+			Start receiving through the provided handler.
 		*/
 		void initialize(std::weak_ptr<AsyncSub> p)    {AsyncRecvLoop::recv_start(p);}
 

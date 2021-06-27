@@ -27,7 +27,7 @@ namespace telling
 
 
 	/*
-		Pull communicator that calls an AsyncRecv delegate.
+		Pull communicator that calls an AsyncRecv handler.
 	*/
 	class Pull :
 		public    Pull_Base,
@@ -45,7 +45,7 @@ namespace telling
 		~Pull() {}
 
 		/*
-			Start receiving through the provided delegate.
+			Start receiving through the provided handler.
 		*/
 		void initialize(std::weak_ptr<AsyncPull> p)    {AsyncRecvLoop::recv_start(p);}
 	};

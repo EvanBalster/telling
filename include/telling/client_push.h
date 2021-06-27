@@ -26,8 +26,8 @@ namespace telling
 
 
 	/*
-		Push communicator that calls an AsyncSend delegate.
-			Push (AKA "Push_Outbox") includes a delegate suitable for most purposes.
+		Push communicator that calls an AsyncSend handler.
+			Push (AKA "Push_Outbox") includes a handler suitable for most purposes.
 	*/
 	class Push :
 		public    Push_Base,
@@ -44,13 +44,13 @@ namespace telling
 		~Push() {}
 
 		/*
-			Initialize with the provided delegate
+			Initialize with the provided handler
 		*/
 		void initialize(std::weak_ptr<AsyncPush> p)    {AsyncSendLoop::send_init(p);}
 
 		/*
 			Attempt to push a message.
-				Delegate may throw an exception rather than accepting.
+				Handler may throw an exception rather than accepting.
 		*/
 		void push(nng::msg &&msg)
 		{

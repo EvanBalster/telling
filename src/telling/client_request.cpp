@@ -73,24 +73,24 @@ Request::~Request()
 	}
 }
 
-void Request::initialize(std::weak_ptr<AsyncRequest> new_delegate)
+void Request::initialize(std::weak_ptr<AsyncRequest> new_handler)
 {
-	if (_delegate.lock())
+	if (_handler.lock())
 		throw nng::exception(nng::error::busy, "Request::initialize (already initialized)");
 
-	if (!new_delegate.lock())
-		throw nng::exception(nng::error::closed, "Request::initialize (delegate is expired)");
+	if (!new_handler.lock())
+		throw nng::exception(nng::error::closed, "Request::initialize (handler is expired)");
 	
-	_delegate = new_delegate;
+	_handler = new_handler;
 }
 
 QueryID Request::request(nng::msg &&msg)
 {
-	auto delegate = _delegate.lock();
+	auto handler = _handler.lock();
 	if (!isReady())
 		throw nng::exception(nng::error::closed, "Request Communicator is not ready.");
-	if (!delegate)
-		throw nng::exception(nng::error::exist, "Request communicator has no delegate to handle messages");
+	if (!handler)
+		throw nng::exception(nng::error::exist, "Request communicator has no message handler");
 
 	std::lock_guard<std::mutex> lock(mtx);
 
@@ -108,7 +108,7 @@ QueryID Request::request(nng::msg &&msg)
 		idle.pop_front();
 	}
 
-	delegate->async_prep(action->requesting(), msg);
+	handler->async_prep(action->requesting(), msg);
 
 	if (!msg)
 	{
@@ -140,11 +140,11 @@ void Request::Action::_callback(void *_action)
 	// Errors / callbacks
 	auto error = action->aio.result();
 	{
-		auto delegate = comm->_delegate.lock();
+		auto handler = comm->_handler.lock();
 
-		if (!delegate)
+		if (!handler)
 		{
-			// Terminate communications if delegate is gone
+			// Terminate communications if handler is gone
 			if (action->state == RECV && error == nng::error::success)
 				action->aio.release_msg();
 			cleanup = true;
@@ -157,11 +157,11 @@ void Request::Action::_callback(void *_action)
 			{
 			case SEND:
 				// Sent!
-				delegate->async_sent(action->requesting());
+				handler->async_sent(action->requesting());
 				break;
 			case RECV:
 				// Receive the response
-				delegate->async_recv(action->requesting(), action->aio.release_msg());
+				handler->async_recv(action->requesting(), action->aio.release_msg());
 				cleanup = true;
 			default:
 			case IDLE:
@@ -174,7 +174,7 @@ void Request::Action::_callback(void *_action)
 		case nng::error::timedout:
 		default:
 			// Causes the query to be canceled.
-			delegate->async_error(action->requesting(), error);
+			handler->async_error(action->requesting(), error);
 			cleanup = true;
 			cancel = true;
 			break;
