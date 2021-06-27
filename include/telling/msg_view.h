@@ -18,16 +18,16 @@ namespace telling
 	public:
 		class Request;
 		class Reply;
-		class Bulletin;
+		class Report;
 
 		class Exception;
 
 		enum class TYPE : int16_t
 		{
 			UNKNOWN  = -1,
-			REPLY    = 0, // (don't change these integer values)
-			BULLETIN = 1, // (they're selected for a parsing trick)
-			REQUEST  = 2,
+			REPLY   = 0, // (don't change these integer values)
+			REPORT  = 1, // (they correspond to protocol's position in the start-line)
+			REQUEST = 2, // (they're selected for a parsing trick)
 
 			MASK_TYPE = 0x0F,
 			FLAG_HEADER_ONLY = 0x10,
@@ -46,9 +46,9 @@ namespace telling
 		*/
 		explicit operator bool() const noexcept    {return _type != TYPE::UNKNOWN;}
 
-		bool is_request () const noexcept    {return _type == TYPE::REQUEST;}
-		bool is_reply   () const noexcept    {return _type == TYPE::REPLY;}
-		bool is_bulletin() const noexcept    {return _type == TYPE::BULLETIN;}
+		bool is_request() const noexcept    {return _type == TYPE::REQUEST;}
+		bool is_reply  () const noexcept    {return _type == TYPE::REPLY;}
+		bool is_report () const noexcept    {return _type == TYPE::REPORT;}
 
 
 		/*
@@ -83,12 +83,6 @@ namespace telling
 		size_t            bodySize()   const noexcept    {return msg.body().size();}
 		template<typename T>
 		const T*          bodyData()   const noexcept    {return msg.body().data<const T>();}
-
-
-		// Duck-typing tests for message formats
-		//bool is_reply   () const noexcept    {return msg && msg.body().data<char>() == statusString.data();}
-		//bool is_request () const noexcept    {return msg && msg.body().data<char>() == methodString.data();}
-		//bool is_bulletin() const noexcept    {return msg && msg.body().data<char>() == uri         .data();}
 
 
 	public:
@@ -136,17 +130,17 @@ namespace telling
 		Reply(nng::msg_view msg)       : MsgView(msg, TYPE::REPLY) {}
 	};
 
-	class MsgView::Bulletin : public MsgView
+	class MsgView::Report : public MsgView
 	{
 	public:
-		~Bulletin() noexcept {}
-		Bulletin()  noexcept {}
-		Bulletin(nng::msg_view msg)    : MsgView(msg, TYPE::BULLETIN) {}
+		~Report() noexcept {}
+		Report()  noexcept {}
+		Report(nng::msg_view msg)    : MsgView(msg, TYPE::REPORT) {}
 	};
 
 
-	inline MsgView View        (nng::msg_view msg)    {return MsgView          (msg);}
-	inline MsgView ViewRequest (nng::msg_view msg)    {return MsgView::Request (msg);}
-	inline MsgView ViewReply   (nng::msg_view msg)    {return MsgView::Reply   (msg);}
-	inline MsgView ViewBulletin(nng::msg_view msg)    {return MsgView::Bulletin(msg);}
+	inline MsgView View       (nng::msg_view msg)    {return MsgView          (msg);}
+	inline MsgView ViewRequest(nng::msg_view msg)    {return MsgView::Request (msg);}
+	inline MsgView ViewReply  (nng::msg_view msg)    {return MsgView::Reply   (msg);}
+	inline MsgView ViewReport (nng::msg_view msg)    {return MsgView::Report(msg);}
 }

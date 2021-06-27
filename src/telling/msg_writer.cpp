@@ -106,7 +106,7 @@ void MsgWriter::startReply(Status status, std::string_view reason)
 	_newline();
 }
 
-void MsgWriter::startBulletin(std::string_view uri, Status status, std::string_view reason)
+void MsgWriter::startReport(std::string_view uri, Status status, std::string_view reason)
 {
 	_startMsg();
 

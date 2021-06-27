@@ -16,7 +16,7 @@ namespace telling
 	public:
 		class Request;
 		class Reply;
-		class Bulletin;
+		class Report;
 
 
 	public:
@@ -93,19 +93,19 @@ namespace telling
 		Reply(const Reply &o, clone_tag)     : Msg(o, clone_tag{}) {}
 	};
 
-	class Msg::Bulletin : public Msg
+	class Msg::Report : public Msg
 	{
 	public:
-		~Bulletin() noexcept {}
-		Bulletin()  noexcept {}
-		Bulletin(nng::msg &&msg)    : Msg(std::move(msg), TYPE::BULLETIN) {}
+		~Report() noexcept {}
+		Report()  noexcept {}
+		Report(nng::msg &&msg)    : Msg(std::move(msg), TYPE::REPORT) {}
 
-		Bulletin clone() const      {return Bulletin(*this, clone_tag{});}
+		Report clone() const      {return Report(*this, clone_tag{});}
 
-		Bulletin(Bulletin &&o)            noexcept    : Msg(std::move(o)) {}
-		Bulletin &operator=(Bulletin &&o) noexcept    {Msg::operator=(std::move(o)); return *this;}
+		Report(Report &&o)            noexcept    : Msg(std::move(o)) {}
+		Report &operator=(Report &&o) noexcept    {Msg::operator=(std::move(o)); return *this;}
 
 	protected:
-		Bulletin(const Bulletin &o, clone_tag)     : Msg(o, clone_tag{}) {}
+		Report(const Report &o, clone_tag)     : Msg(o, clone_tag{}) {}
 	};
 }

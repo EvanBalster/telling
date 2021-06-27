@@ -88,22 +88,21 @@ namespace telling
 
 
 	protected:
-
 		// Subscription processing
-		// void async_recv (Subscribing, nng::msg &&bulletin) -- REQUIRED
+		// void async_recv (Subscribing, nng::msg &&report) -- REQUIRED
 		void async_error(Subscribing, AsyncError)         {}
 
 		// Request/reply processing
 		void async_prep (Requesting req, nng::msg &) override    {}
 		void async_sent (Requesting req)             override    {}
-		// virtual void async_recv (Requesting, nng::msg &&reply) -- REQUIRED
+		// void async_recv (Requesting, nng::msg &&reply) -- REQUIRED
 		void async_error(Requesting req, AsyncError) override    {}
 
 		// Pushing errors (optional)
-		virtual void async_error(Pushing, AsyncError)    {}
+		void async_error(Pushing, AsyncError) override    {}
 
 		// Optionally receive pipe events from the various sockets.
-		virtual void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) override {}
+		void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) override {}
 
 
 	private:

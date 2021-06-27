@@ -116,6 +116,9 @@
     <ClInclude Include="..\..\include\telling\client_base.h">
       <Filter>client</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\include\telling\uri_table.h">
+      <Filter>common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\telling\client.cpp">

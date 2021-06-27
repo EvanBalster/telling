@@ -55,7 +55,7 @@ namespace telling
 		/*
 			Publish a message to a topic (URI).
 		*/
-		virtual void publish(nng::msg &&bulletin) = 0;
+		virtual void publish(nng::msg &&report) = 0;
 	};
 
 

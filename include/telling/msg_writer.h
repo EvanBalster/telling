@@ -20,11 +20,11 @@ namespace telling
 		/*
 			STEP 1: call one of these methods to begin the message.
 		*/
-		void startRequest (std::string_view uri, Method method = MethodCode::GET);
-		void startReply   (                      Status status = StatusCode::OK)            {startReply   (     status, status.reasonPhrase());}
-		void startReply   (                      Status status, std::string_view reason);
-		void startBulletin(std::string_view uri, Status status = StatusCode::OK)            {startBulletin(uri, status, status.reasonPhrase());}
-		void startBulletin(std::string_view uri, Status status, std::string_view reason);
+		void startRequest(std::string_view uri, Method method = MethodCode::GET);
+		void startReply  (                      Status status = StatusCode::OK)            {startReply (     status, status.reasonPhrase());}
+		void startReply  (                      Status status, std::string_view reason);
+		void startReport (std::string_view uri, Status status = StatusCode::OK)            {startReport(uri, status, status.reasonPhrase());}
+		void startReport (std::string_view uri, Status status, std::string_view reason);
 
 		/*
 			STEP 2: write as many headers as desired.
@@ -81,15 +81,13 @@ namespace telling
 	/*
 		Construct a MsgWriter with STEP 1 completed.
 	*/
-	inline MsgWriter WriteRequest     (std::string_view uri, Method method = MethodCode::GET)           {MsgWriter w;      w.startRequest(uri, method);          return w;}
-	inline MsgWriter WriteReply       (                      Status status = StatusCode::OK)            {MsgWriter w;      w.startReply(status);                 return w;}
-	inline MsgWriter WriteBulletin    (std::string_view uri, Status status = StatusCode::OK)            {MsgWriter w;      w.startBulletin(uri, status);         return w;}
-	inline MsgWriter WriteReply       (                      Status status, std::string_view reason)    {MsgWriter w;      w.startReply(status, reason);         return w;}
-	inline MsgWriter WriteBulletin    (std::string_view uri, Status status, std::string_view reason)    {MsgWriter w;      w.startBulletin(uri, status, reason); return w;}
+	inline MsgWriter WriteRequest(std::string_view uri, Method method = MethodCode::GET)           {MsgWriter w;      w.startRequest(uri, method);        return w;}
+	inline MsgWriter WriteReply  (                      Status status = StatusCode::OK)            {MsgWriter w;      w.startReply(status);               return w;}
+	inline MsgWriter WriteReport (std::string_view uri, Status status = StatusCode::OK)            {MsgWriter w;      w.startReport(uri, status);         return w;}
+	inline MsgWriter WriteReply  (                      Status status, std::string_view reason)    {MsgWriter w;      w.startReply(status, reason);       return w;}
+	inline MsgWriter WriteReport (std::string_view uri, Status status, std::string_view reason)    {MsgWriter w;      w.startReport(uri, status, reason); return w;}
 
 	inline MsgWriter HttpRequest (std::string_view uri, Method method = MethodCode::GET)           {MsgWriter w=Http; w.startRequest(uri, method);          return w;}
 	inline MsgWriter HttpReply   (                      Status status = StatusCode::OK)            {MsgWriter w=Http; w.startReply(status);                 return w;}
-	inline MsgWriter HttpBulletin(std::string_view uri, Status status = StatusCode::OK)            {MsgWriter w=Http; w.startBulletin(uri, status);         return w;}
 	inline MsgWriter HttpReply   (                      Status status, std::string_view reason)    {MsgWriter w=Http; w.startReply(status, reason);         return w;}
-	inline MsgWriter HttpBulletin(std::string_view uri, Status status, std::string_view reason)    {MsgWriter w=Http; w.startBulletin(uri, status, reason); return w;}
 }

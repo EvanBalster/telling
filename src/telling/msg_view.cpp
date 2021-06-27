@@ -67,11 +67,11 @@ void MsgView::_parse_msg()
 	}
 
 	/*
-		Case     | word 1   | word 2   | word 3   | word 4
-		---------|----------|----------|-------------------------
-		REPLY    | PROTOCOL | STATUS   | REASON-PHRASE
-		BULLETIN | URI      | PROTOCOL | STATUS   | REASON-PHRASE
-		REQUEST  | METHOD   | URI      | PROTOCOL |
+		Case    | word 1   | word 2   | word 3   | word 4
+		--------|----------|----------|-------------------------
+		REPLY   | PROTOCOL | STATUS   [ REASON-PHRASE ]
+		REPORT  | URI      [ PROTOCOL | STATUS   | REASON-PHRASE ]
+		REQUEST | METHOD   | URI      | PROTOCOL
 
 		...URI can be anything, and REASON-PHRASE may contain spaces.
 		So our strategy is to search backwards for a matching protocol.
@@ -105,7 +105,7 @@ void MsgView::_parse_msg()
 		_reason   = restRange(parts[2]);
 		break;
 
-	case TYPE::BULLETIN: // Bulletin
+	case TYPE::REPORT: // Report
 		if (count < 4) throw MsgException(MsgError::START_LINE_MALFORMED, line.data(), line.length());
 		_uri      = toRange  (parts[0]);
 		_protocol = toRange  (parts[1]);

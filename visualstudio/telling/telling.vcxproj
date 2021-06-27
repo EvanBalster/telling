@@ -171,6 +171,7 @@
     <ClInclude Include="..\..\include\telling\server.h" />
     <ClInclude Include="..\..\include\telling\service.h" />
     <ClInclude Include="..\..\include\telling\service_reply.h" />
+    <ClInclude Include="..\..\include\telling\uri_table.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\telling\client.cpp" />

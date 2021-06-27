@@ -195,9 +195,9 @@ void Server::Services::run_management_thread()
 			server->publish.subscribe.disconnect(route->path);
 
 			// Publish existence of new service?
-			auto bulletin = WriteBulletin("*services", StatusCode::Gone);
-			bulletin.writeData(route->path);
-			publish_events.publish(bulletin.release());
+			auto report = WriteReport("*services", StatusCode::Gone);
+			report.writeData(route->path);
+			publish_events.publish(report.release());
 
 			delete route;
 		}
@@ -274,9 +274,9 @@ void Server::Services::run_management_thread()
 			register_reply.respondTo(spec.queryID, notify.release());
 
 			// Publish existence of new service
-			auto bulletin = WriteBulletin("*services", StatusCode::Created);
-			bulletin.writeData(spec.map_uri);
-			publish_events.publish(bulletin.release());
+			auto report = WriteReport("*services", StatusCode::Created);
+			report.writeData(spec.map_uri);
+			publish_events.publish(report.release());
 		}
 
 		management.cond.wait(lock);

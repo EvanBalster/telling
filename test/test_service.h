@@ -109,7 +109,7 @@ namespace telling_test
 				if (!service) return;
 
 				// Republish the pushed message
-				auto pub = WriteBulletin(service->uri);
+				auto pub = WriteReport(service->uri);
 				for (auto h : req.headers()) pub.writeHeader(h.name, h.value);
 				pub.writeData(req.data());
 				service->publish(pub.release());

@@ -71,9 +71,9 @@ void print(const MsgView::Reply &msg)
 	cout << endl;
 }
 
-void print(const MsgView::Bulletin &msg)
+void print(const MsgView::Report &msg)
 {
-	cout << "View Bulletin:" << endl;
+	cout << "View Report:" << endl;
 	printStartLine(msg);
 	printURI      (msg);
 	printProtocol (msg);
@@ -129,33 +129,33 @@ Content-Type:		application/json
 	}
 #endif
 
-	nng::msg mBulletin;
+	nng::msg mReport;
 #if TEST_MSG_RAW
-	mBulletin = string_to_msg(
+	mReport = string_to_msg(
 R"**(/voices/1  200 
 Content-Type:		application/json 	 
 
 {"attributes": {"midi_pitch": 64.729}})**");
 #else
 	{
-		auto msg = WriteBulletin("/voices/1");
+		auto msg = WriteReport("/voices/1");
 		msg.writeHeader("Content-Type", "application/json");
 		msg.writeData(R"*({"attributes": {"midi_pitch": 64.729}})*");
-		mBulletin = msg.release();
+		mReport = msg.release();
 	}
 #endif
 
-	MsgView::Request  request;
-	MsgView::Reply    reply;
-	MsgView::Bulletin bulletin;
+	MsgView::Request request;
+	MsgView::Reply   reply;
+	MsgView::Report  report;
 	try
 	{
 		request  = MsgView::Request(mRequest);
 		cout << "Request parsed..." << endl;
 		reply    = MsgView::Reply(mReply);
 		cout << "Reply parsed..." << endl;
-		bulletin = MsgView::Bulletin(mBulletin);
-		cout << "Bulletin parsed..." << endl;
+		report = MsgView::Report(mReport);
+		cout << "Report parsed..." << endl;
 	}
 	catch (MsgException e)
 	{
@@ -171,7 +171,7 @@ Content-Type:		application/json
 
 	print(reply);
 
-	print(bulletin);
+	print(report);
 }
 
 
@@ -258,15 +258,15 @@ int main(int argc, char **argv)
 					//printHeaders(req);
 
 					// Re-publish the pulled message
-					auto bulletin = WriteBulletin(req.uri());
+					auto report = WriteReport(req.uri());
 					for (auto header : req.headers())
 					{
-						bulletin.writeHeader(header.name, header.value);
+						report.writeHeader(header.name, header.value);
 					}
-					bulletin.writeHeader("X-Republished-By", uri);
-					bulletin.writeData(req.body());
-					bulletin.writeData(" (republished)");
-					service.publish(bulletin.release());
+					report.writeHeader("X-Republished-By", uri);
+					report.writeData(req.body());
+					report.writeData(" (republished)");
+					service.publish(report.release());
 				}
 				catch (MsgException e)
 				{
@@ -324,10 +324,10 @@ int main(int argc, char **argv)
 				{
 					timer = 0;
 
-					auto bulletin = WriteBulletin(uri);
-					bulletin.writeHeader("Content-Type", "text/plain");
-					bulletin.writeData("This is a heartbeat message!");
-					service.publish(bulletin.release());
+					auto report = WriteReport(uri);
+					report.writeHeader("Content-Type", "text/plain");
+					report.writeData("This is a heartbeat message!");
+					service.publish(report.release());
 				}
 			}
 		}
@@ -402,7 +402,7 @@ int main(int argc, char **argv)
 					cout << "CLI-SUB recv: ";
 					try
 					{
-						MsgView::Bulletin bull(msg);
+						MsgView::Report bull(msg);
 						//print(bull);
 						cout << "[" << bull.startLine() << "] `" << bull.bodyString() << "`" << endl;
 						cout << endl;
@@ -410,7 +410,7 @@ int main(int argc, char **argv)
 					catch (MsgException e)
 					{
 						cout << endl;
-						cout << "\t...Error parsing bulletin: " << e.what() << endl;
+						cout << "\t...Error parsing report: " << e.what() << endl;
 						cout << "\t...  At location: `"
 							<< std::string_view(e.position, e.length) << '`' << endl;
 						cout << endl;
@@ -448,7 +448,7 @@ int main(int argc, char **argv)
 							catch (MsgException e)
 							{
 								cout << endl;
-								cout << "\t...Error parsing bulletin: " << e.what() << endl;
+								cout << "\t...Error parsing report: " << e.what() << endl;
 								cout << "\t...  At location: `"
 									<< std::string_view(e.position, e.length) << '`' << endl;
 								cout << endl;

@@ -41,11 +41,11 @@ void Server::PubSub::async_recv(Subscribing, nng::msg &&msg)
 	auto server = this->server();
 	auto &log = server->log;
 
-	MsgView::Bulletin bulletin;
-	try                    {bulletin = msg;}
+	MsgView::Report report;
+	try                    {report = msg;}
 	catch (MsgException e) {server->log << Name() << ": message exception: " << e.what() << std::endl; return;}
 
-	//log << Name() << ": publishing on URI `" << bulletin.uri() << "`" << std::endl;
+	//log << Name() << ": publishing on URI `" << report.uri() << "`" << std::endl;
 
 	// PubSub the message!
 	publish.publish(std::move(msg));

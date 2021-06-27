@@ -66,7 +66,7 @@ namespace telling
 		/*
 			Publish a message to a topic (URI).
 		*/
-		void publish(nng::msg &&bulletin) final                 {_publisher.publish(std::move(bulletin));}
+		void publish(nng::msg &&report) final                   {_publisher.publish(std::move(report));}
 
 		/*
 			Respond to the query with the given ID.
