@@ -43,6 +43,7 @@ void MsgWriter::_startMsg()
 	if (msg) throw MsgException(MsgError::ALREADY_WRITTEN, 0, 0);
 	*this = MsgWriter(protocol);
 	msg = nng::make_msg(0);
+	out.open(msg, std::ios::out);
 }
 
 void MsgWriter::_autoCloseHeaders()
@@ -58,16 +59,8 @@ void MsgWriter::_autoCloseHeaders()
 
 void MsgWriter::_newline()
 {
-	msg.body().append(crlf ? nng::view("\r\n", 2) : nng::view("\n", 1));
-}
-
-void MsgWriter::_append(char c)
-{
-	msg.body().append(nng::view(&c, 1));
-}
-void MsgWriter::_append(const std::string_view &s)
-{
-	msg.body().append(nng::view(s.data(), s.length()));
+	if (crlf) out.write("\r\n",2);
+	else      out.write("\n",1);
 }
 
 
@@ -77,16 +70,12 @@ void MsgWriter::startRequest(std::string_view uri, Method method)
 
 	if (!method)
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
-
-	_append(method.toString());
-	_append(' ');
-
 	if (ContainsWhitespace(uri))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
-	_append(uri);
-	_append(' ');
-	_append(protocol.toString());
 
+	out << method.toString()
+		<< ' ' << uri
+		<< ' ' << protocol.toString();
 	_newline();
 }
 
@@ -94,15 +83,12 @@ void MsgWriter::startReply(Status status, std::string_view reason)
 {
 	_startMsg();
 
-	_append(protocol.toString());
-	_append(' ');
-	_append(status.toString());
-	_append(' ');
-
 	if (ContainsNewline(reason))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
-	_append(reason);
 
+	out << protocol.toString()
+		<< ' ' << status.toString()
+		<< ' ' << reason;
 	_newline();
 }
 
@@ -112,17 +98,13 @@ void MsgWriter::startReport(std::string_view uri, Status status, std::string_vie
 
 	if (ContainsWhitespace(uri))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
-	_append(uri);
-	_append(' ');
-	_append(protocol.toString());
-	_append(' ');
-	_append(status.toString());
-	_append(' ');
-
 	if (ContainsNewline(reason))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
-	_append(reason);
 
+	out << uri
+		<< ' ' << protocol.toString()
+		<< ' ' << status.toString()
+		<< ' ' << reason;
 	_newline();
 }
 
@@ -136,9 +118,7 @@ void MsgWriter::writeHeader(std::string_view name, std::string_view value)
 	if (ContainsNewline(value))
 		throw MsgException(MsgError::HEADER_MALFORMED, 0, 0);
 
-	_append(name);
-	_append(':');
-	_append(value);
+	out << name << ':' << value;
 	_newline();
 }
 
@@ -146,7 +126,7 @@ void MsgWriter::writeHeader(std::string_view name, std::string_view value)
 void MsgWriter::writeData(std::string_view text)
 {
 	_autoCloseHeaders();
-	_append(text);
+	out << text;
 }
 
 void MsgWriter::writeData(nng::view data)
@@ -218,11 +198,12 @@ void MsgWriter::writeHeader_Length(size_t maxLength)
 
 	size_t digits = NumDigits(maxLength);
 
-	_append("Content-Length:");
+	out << "Content-Length:";
 
 	lengthOffset = msg.body().size();
 	lengthSize   = digits;
 
-	_append(std::string_view("                    ", digits));
+	// Unlikely we'll need to deal with messages >= 100 exabytes
+	out << std::string_view("                    ", digits);
 	_newline();
 }

@@ -5,9 +5,12 @@
 #include <nngpp/msg.h>
 
 #include "msg_util.h"
+#include "msg.h"
+
 #include "msg_status.h"
 #include "msg_method.h"
 #include "msg_protocol.h"
+#include "msg_stream.h"
 
 
 namespace telling
@@ -64,16 +67,15 @@ namespace telling
 		bool        crlf = false;
 
 	private:
-		nng::msg msg;
+		nng::msg        msg;
+		nng::omsgstream out;
+
 		size_t dataOffset = 0;
-		size_t contentLengthOffset = 0;
 
 		size_t lengthOffset = 0, lengthSize = 0;
 
 		void _startMsg();
 		void _autoCloseHeaders();
-		void _append(const std::string_view &);
-		void _append(char);
 		void _newline();
 	};
 
