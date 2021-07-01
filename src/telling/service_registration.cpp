@@ -84,9 +84,8 @@ Registration::Registration(
 	if (!servicePath_alias.length()) servicePath_alias = servicePath;
 
 	MsgWriter msg = WriteRequest("*services", MethodCode::POST);
-	msg.writeData(servicePath_alias);
-	msg.writeData("\n");
-	msg.writeData(servicePath);
+	msg.writeBody()
+		<< servicePath_alias << "\n" << servicePath;
 
 	requester.request(msg.release());
 }

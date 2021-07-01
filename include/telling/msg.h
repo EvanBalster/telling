@@ -43,13 +43,23 @@ namespace telling
 		Msg &operator=(Msg &&o) noexcept    {_free(); MsgView::operator=(o); o._release(); return *this;}
 
 
+		/*
+			Write a header to the message's end.
+		*/
+
+
 	protected:
 		// No implicit copying, only moving.
 		Msg           (const Msg&) = delete;
 		void operator=(const Msg&) = delete;
 
 		struct clone_tag {};
+		struct create_tag {};
 
+		Msg(create_tag)
+		{
+			msg = nng::msg(size_t(0)).release();
+		}
 		Msg(const Msg &o, clone_tag) : MsgView(o)
 		{
 			nng::msg orig(msg.get()), copy(orig);
@@ -64,9 +74,11 @@ namespace telling
 	class Msg::Request : public Msg
 	{
 	public:
+		// Parse a Request
+		Request(nng::msg &&msg)     : Msg(std::move(msg), TYPE::REQUEST) {}
+
 		~Request() noexcept {}
 		Request()  noexcept {}
-		Request(nng::msg &&msg)     : Msg(std::move(msg), TYPE::REQUEST) {}
 
 		Request clone() const       {return Request(*this, clone_tag{});}
 
@@ -80,9 +92,11 @@ namespace telling
 	class Msg::Reply : public Msg
 	{
 	public:
+		// Parse a Reply
+		Reply(nng::msg &&msg)       : Msg(std::move(msg), TYPE::REPLY) {}
+
 		~Reply() noexcept {}
 		Reply()  noexcept {}
-		Reply(nng::msg &&msg)       : Msg(std::move(msg), TYPE::REPLY) {}
 
 		Reply clone() const         {return Reply(*this, clone_tag{});}
 
@@ -96,9 +110,11 @@ namespace telling
 	class Msg::Report : public Msg
 	{
 	public:
+		// Parse a Report
+		Report(nng::msg &&msg)    : Msg(std::move(msg), TYPE::REPORT) {}
+
 		~Report() noexcept {}
 		Report()  noexcept {}
-		Report(nng::msg &&msg)    : Msg(std::move(msg), TYPE::REPORT) {}
 
 		Report clone() const      {return Report(*this, clone_tag{});}
 

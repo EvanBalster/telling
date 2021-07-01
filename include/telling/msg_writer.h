@@ -15,7 +15,7 @@
 
 namespace telling
 {
-	class MsgWriter
+	class MsgWriter : protected Msg
 	{
 	public:
 		MsgWriter(MsgProtocol protocol = Telling);
@@ -43,16 +43,14 @@ namespace telling
 		/*
 			STEP 3: append body data as desired.
 		*/
-		void writeData(nng::view        data);
-		void writeData(std::string_view text);
-		void writeData(const char      *cStr)    {writeData(std::string_view(cStr));}
+		nng::omsgstream writeBody()    {_autoCloseHeaders(); return nng::omsgstream(out);}
 
 
 		/*
 			STEP 4: release the composed message.
 				Afterwards, MsgWriter is "reset", ready to write a new message.
 		*/
-		nng::msg &&release();
+		nng::msg release();
 
 
 		/*
@@ -62,17 +60,17 @@ namespace telling
 		void setNNGHeader(nng::view data);
 
 
-	public:
+	protected:
+		nng::msgbuf out;
 		MsgProtocol protocol;
 		bool        crlf = false;
 
 	private:
-		nng::msg        msg;
-		nng::omsgstream out;
-
-		size_t dataOffset = 0;
-
-		size_t lengthOffset = 0, lengthSize = 0;
+		struct
+		{
+			uint16_t lengthOffset, lengthSize;
+		}
+			head = {};
 
 		void _startMsg();
 		void _autoCloseHeaders();

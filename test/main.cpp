@@ -108,7 +108,7 @@ Content-Type:		application/json
 	{
 		auto msg = WriteRequest("/voices/1", MethodCode::PATCH);
 		msg.writeHeader("Content-Type", "application/json");
-		msg.writeData(R"*({"attributes": {"slide_mode": "hold"}})*");
+		msg.writeBody() << R"*({"attributes": {"slide_mode": "hold"}})*";
 		mRequest = msg.release();
 	}
 #endif
@@ -124,7 +124,7 @@ Content-Type:		application/json
 	{
 		auto msg = WriteReply();
 		msg.writeHeader("Content-Type", "application/json");
-		msg.writeData(R"*({"attributes": {"midi_pitch": 64.729}})*");
+		msg.writeBody() << R"*({"attributes": {"midi_pitch": 64.729}})*";
 		mReply = msg.release();
 	}
 #endif
@@ -140,7 +140,7 @@ Content-Type:		application/json
 	{
 		auto msg = WriteReport("/voices/1");
 		msg.writeHeader("Content-Type", "application/json");
-		msg.writeData(R"*({"attributes": {"midi_pitch": 64.729}})*");
+		msg.writeBody() << R"*({"attributes": {"midi_pitch": 64.729}})*";
 		mReport = msg.release();
 	}
 #endif
@@ -264,8 +264,7 @@ int main(int argc, char **argv)
 						report.writeHeader(header.name, header.value);
 					}
 					report.writeHeader("X-Republished-By", uri);
-					report.writeData(req.body());
-					report.writeData(" (republished)");
+					report.writeBody() << req.body() << " (republished)";
 					service.publish(report.release());
 				}
 				catch (MsgException e)
@@ -291,7 +290,7 @@ int main(int argc, char **argv)
 
 					auto reply = WriteReply();
 					reply.writeHeader("Content-Type", "text/plain");
-					reply.writeData(reply_text);
+					reply.writeBody() << reply_text;
 					service.respond(reply.release());
 				}
 				catch (MsgException e)
@@ -326,7 +325,7 @@ int main(int argc, char **argv)
 
 					auto report = WriteReport(uri);
 					report.writeHeader("Content-Type", "text/plain");
-					report.writeData("This is a heartbeat message!");
+					report.writeBody() << "This is a heartbeat message!";
 					service.publish(report.release());
 				}
 			}
@@ -489,7 +488,7 @@ int main(int argc, char **argv)
 			{
 			case 0:
 				// Push
-				msg.writeData("I'm getting pushy!");
+				msg.writeBody() << "I'm getting pushy!";
 				cout << "CLI-PUSH send > `" << service_uri << "`";
 				if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
 				cout << endl;

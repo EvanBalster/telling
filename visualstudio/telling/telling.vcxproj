@@ -149,6 +149,7 @@
     <ClInclude Include="..\..\include\telling\client_subscribe.h" />
     <ClInclude Include="..\..\include\telling\deposit.h" />
     <ClInclude Include="..\..\include\telling\msg.h" />
+    <ClInclude Include="..\..\include\telling\msg_layout.h" />
     <ClInclude Include="..\..\include\telling\msg_protocol.h" />
     <ClInclude Include="..\..\include\telling\http_client.h" />
     <ClInclude Include="..\..\include\telling\msg_method.h" />
@@ -178,6 +179,7 @@
     <ClCompile Include="..\..\src\telling\client.cpp" />
     <ClCompile Include="..\..\src\telling\client_request.cpp" />
     <ClCompile Include="..\..\src\telling\client_subscribe.cpp" />
+    <ClCompile Include="..\..\src\telling\msg.cpp" />
     <ClCompile Include="..\..\src\telling\msg_util.cpp" />
     <ClCompile Include="..\..\src\telling\msg_view.cpp" />
     <ClCompile Include="..\..\src\telling\msg_writer.cpp" />

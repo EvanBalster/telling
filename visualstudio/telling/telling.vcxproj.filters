@@ -122,6 +122,9 @@
     <ClInclude Include="..\..\include\telling\msg_stream.h">
       <Filter>msg</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg_layout.h">
+      <Filter>msg</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\telling\client.cpp">
@@ -174,6 +177,9 @@
     </ClCompile>
     <ClCompile Include="..\..\src\telling\service_reactor.cpp">
       <Filter>service</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\msg.cpp">
+      <Filter>msg</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

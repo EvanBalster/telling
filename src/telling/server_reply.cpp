@@ -119,12 +119,11 @@ void Server::ReqRep::async_recv(ClientRequesting, nng::msg &&msg)
 		switch (status.code)
 		{
 		case StatusCode::NotFound:
-			writer.writeData("No service for URI `");
-			writer.writeData(request.uri());
-			writer.writeData("`");
+			writer.writeBody()
+				<< "No service for URI `" << request.uri() << "`";
 			break;
 		case StatusCode::ServiceUnavailable:
-			writer.writeData("Service exists but forwarding failed.");
+			writer.writeBody() << "Service exists but forwarding failed.";
 			break;
 		}
 

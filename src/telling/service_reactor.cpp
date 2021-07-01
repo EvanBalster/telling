@@ -66,12 +66,9 @@ void Reactor::_handle(Query query, nng::msg &&_msg)
 			auto msg = WriteReply(StatusCode::InternalServerError);
 			msg.writeHeader("Content-Type", "text/plain");
 
-			msg.writeData("NNG exception in `");
-			msg.writeData(_uri_prefix);
-			msg.writeData("`:\r\n\t");
-			msg.writeData(ex.what());
-			msg.writeData(" -- ");
-			msg.writeData(ex.who());
+			msg.writeBody()
+				<< "NNG exception in `" << _uri_prefix << "`:\r\n\t"
+				<< ex.what() << " -- " << ex.who();
 
 			query.reply(msg.release());
 		}
@@ -85,10 +82,9 @@ void Reactor::_handle(Query query, nng::msg &&_msg)
 			auto msg = WriteReply(StatusCode::InternalServerError);
 			msg.writeHeader("Content-Type", "text/plain");
 
-			msg.writeData("C++ exception in `");
-			msg.writeData(_uri_prefix);
-			msg.writeData("`:\r\n\t");
-			msg.writeData(ex.what());
+			msg.writeBody()
+				<< "C++ exception in `" << _uri_prefix << "`:\r\n\t"
+				<< ex.what();
 
 			query.reply(msg.release());
 		}

@@ -3,7 +3,8 @@
 
 #include <streambuf>
 #include <sstream>
-#include <nngpp/msg.h>
+#include <nngpp/msg_view.h>
+#include <nngpp/view.h>
 
 
 /*
@@ -46,7 +47,7 @@ namespace nng
 
 
 	public:
-		basic_msgbuf()  noexcept    : _body(nullptr) {}
+		basic_msgbuf()  noexcept    : _body(nullptr), _ncap(0) {}
 		~basic_msgbuf() noexcept    {close();}
 
 		basic_msgbuf* open(nng::msg_view msg, std::ios::openmode mode)    {return open(msg.body(), mode);}
@@ -205,8 +206,8 @@ namespace nng
 
 	protected:
 		nng::msg_body      _body;
-		size_t             _ncap = 0; // Known capacity (elements)
 		std::ios::openmode _mode = 0;
+		size_t             _ncap = 0; // Known capacity (elements)
 
 		char_type *_start() const    {return _body.data<char_type>();}
 		char_type *_g_end() const    {return _body.data<char_type>() + _body.size()/sizeof(char_type);}
@@ -264,6 +265,7 @@ namespace nng
 		void open(nng::msg_view msg, std::ios::openmode mode = ModeDefault)           {_mebuf::open(msg, mode&ModeForce);}
 		void close() noexcept                                                         {_mebuf::close();}
 
+		basic_msgstream_(const _mebuf &buf)                                           : StreamBase(_asbuf()), _mebuf(buf) {}
 		basic_msgstream_(nng::msg_body msg, std::ios::openmode mode = ModeDefault)    : StreamBase(_asbuf()) {_mebuf::open(msg, mode&ModeForce);}
 		basic_msgstream_(nng::msg_view msg, std::ios::openmode mode = ModeDefault)    : StreamBase(_asbuf()) {_mebuf::open(msg, mode&ModeForce);}
 
@@ -294,4 +296,16 @@ namespace nng
 	using msgstream  = basic_msgstream<char>;
 	using imsgstream = basic_imsgstream<char>;
 	using omsgstream = basic_omsgstream<char>;
+
+
+	/*
+		Special output operators for nng::view.
+	*/
+	inline omsgstream &operator<<(omsgstream &out, const nng::view &v)    {out.write(v.data<char>(), v.size()); return out;}
+	inline msgstream  &operator<<( msgstream &out, const nng::view &v)    {out.write(v.data<char>(), v.size()); return out;}
+
+	template<size_t N>
+	omsgstream &operator<<(omsgstream &out, const char (&s)[N])    {out.write(s, N-(s[N-1]==0)); return out;}
+	template<size_t N>
+	msgstream  &operator<<( msgstream &out, const char (&s)[N])    {out.write(s, N-(s[N-1]==0)); return out;}
 }

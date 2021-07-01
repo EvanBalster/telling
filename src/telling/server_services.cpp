@@ -109,7 +109,7 @@ void Server::Services::async_recv(Replying rep, nng::msg &&_msg)
 		}
 
 		auto writer = WriteReply(HttpStatus::Code::BadRequest);
-		writer.writeData("Malformed Registration Request Body.");
+		writer.writeBody() << "Malformed Registration Request Body.";
 		rep.send(writer.release());
 		return;
 	}
@@ -196,7 +196,7 @@ void Server::Services::run_management_thread()
 
 			// Publish existence of new service?
 			auto report = WriteReport("*services", StatusCode::Gone);
-			report.writeData(route->path);
+			report.writeBody() << route->path;
 			publish_events.publish(report.release());
 
 			delete route;
@@ -221,8 +221,9 @@ void Server::Services::run_management_thread()
 				// Failed dialing... service unavailable
 				auto notify = WriteReply(StatusCode::Conflict);
 				notify.writeHeader("Content-Type", "text/plain");
-				notify.writeData(std::string(spec.map_uri));
-				notify.writeData("\nThis URI is already registered.");
+				notify.writeBody()
+					<< std::string(spec.map_uri)
+					<< "\nThis URI is already registered.";
 				register_reply.respondTo(spec.queryID, notify.release());
 
 				continue;
@@ -259,8 +260,9 @@ void Server::Services::run_management_thread()
 				// Failed dialing... service unavailable
 				auto notify = WriteReply(StatusCode::ServiceUnavailable);
 				notify.writeHeader("Content-Type", "text/plain");
-				notify.writeData(std::string(spec.host.base));
-				notify.writeData("\nCould not dial specified service URI.");
+				notify.writeBody()
+					<< std::string(spec.host.base)
+					<< "\nCould not dial specified service URI.";
 				register_reply.respondTo(spec.queryID, notify.release());
 
 				continue;
@@ -269,13 +271,14 @@ void Server::Services::run_management_thread()
 			// Notify service of successful enrollment.
 			auto notify = WriteReply();
 			notify.writeHeader("Content-Type", "text/plain");
-			notify.writeData(spec.map_uri);
-			notify.writeData("\nEnrolled with this URI.");
+			notify.writeBody()
+				<< spec.map_uri;
+				"\nEnrolled with this URI.";
 			register_reply.respondTo(spec.queryID, notify.release());
 
 			// Publish existence of new service
 			auto report = WriteReport("*services", StatusCode::Created);
-			report.writeData(spec.map_uri);
+			report.writeBody() << spec.map_uri;
 			publish_events.publish(report.release());
 		}
 
