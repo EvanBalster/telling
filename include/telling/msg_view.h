@@ -7,6 +7,7 @@
 #include "msg_protocol.h"
 #include "msg_status.h"
 #include "msg_layout.h"
+#include "msg_stream.h"
 
 
 namespace telling
@@ -22,6 +23,8 @@ namespace telling
 		class Report;
 
 		class Exception;
+
+		using TYPE = MsgLayout::TYPE;
 
 
 	public:
@@ -40,6 +43,8 @@ namespace telling
 		bool is_request() const noexcept    {return _type() == TYPE::REQUEST;}
 		bool is_reply  () const noexcept    {return _type() == TYPE::REPLY;}
 		bool is_report () const noexcept    {return _type() == TYPE::REPORT;}
+
+		TYPE msgType   () const noexcept    {return _type();}
 
 
 		/*
@@ -68,11 +73,14 @@ namespace telling
 		/*
 			Access the message body.
 		*/
-		nng::view         body()       const noexcept    {return _view  (_p_body, msg.body().size() - _p_body);}
-		std::string_view  bodyString() const noexcept    {return _string(_p_body, msg.body().size() - _p_body);}
-		size_t            bodySize()   const noexcept    {return msg.body().size();}
+		nng::view         body()       const noexcept    {return _view  (_p_body, bodySize());}
+		std::string_view  bodyString() const noexcept    {return _string(_p_body, bodySize());}
+		size_t            bodySize()   const noexcept    {return msg.body().size() - _p_body;}
 		template<typename T>
-		const T*          bodyData()   const noexcept    {return msg.body().data<const T>();}
+		const T*          bodyData()   const noexcept    {return msg.body().data<const char>() + _p_body;}
+
+		nng::imsgstream   readBody()   const noexcept    {return nng::imsgstream(msg);}
+
 
 
 	public:
@@ -90,8 +98,8 @@ namespace telling
 		std::string_view _string_rem_nl(HeadRange b) const noexcept
 		{
 			std::string_view s(_string(b));
-			if (s.back() == '\n') s.remove_suffix(1);
-			if (s.back() == '\r') s.remove_suffix(1);
+			if (            s.back() == '\n') s.remove_suffix(1);
+			if (s.size() && s.back() == '\r') s.remove_suffix(1);
 			return s;
 		}
 	};
@@ -104,7 +112,7 @@ namespace telling
 		Request()  noexcept {}
 		Request(nng::msg_view msg)     : MsgView(msg, TYPE::REQUEST) {}
 	};
-
+	
 	class MsgView::Reply : public MsgView
 	{
 	public:

@@ -84,11 +84,43 @@ void print(const MsgView::Report &msg)
 	cout << endl;
 }
 
+void print(const MsgView &msg)
+{
+	switch (msg.msgType())
+	{
+	case Msg::TYPE::REQUEST: print(static_cast<const MsgView::Request&>(msg)); break;
+	case Msg::TYPE::REPORT : print(static_cast<const MsgView::Report &>(msg)); break;
+	case Msg::TYPE::REPLY  : print(static_cast<const MsgView::Reply  &>(msg)); break;
+	default:
+		std::cout << "View unknown-type message:" << endl;
+		printStartLine(msg);
+		printMethod   (msg);
+		printURI      (msg);
+		printProtocol (msg);
+		printStatus   (msg);
+		printReason   (msg);
+		printHeaders  (msg);
+		printBody     (msg);
+		cout << endl;
+	}
+}
 
+std::ostream &operator<<(std::ostream &o, Msg::TYPE t)
+{
+	switch (t)
+	{
+	case Msg::TYPE::REQUEST: return o << "REQUEST";
+	case Msg::TYPE::REPORT: return o << "REPORT";
+	case Msg::TYPE::REPLY: return o << "REPLY";
+	default:              return o << "UNKNOWN";
+	}
+}
 
 void test_message_parsers()
 {
-	auto string_to_msg = [](const std::string &s)
+	using namespace std::literals;
+
+	auto string_to_msg = [](std::string_view s)
 	{
 		nng::msg msg = nng::make_msg(0);
 		msg.body().append(nng::view(s.data(), s.length()));
@@ -96,82 +128,101 @@ void test_message_parsers()
 	};
 
 
+	struct MsgRaw
+	{
+		Msg::TYPE        type;
+		std::string_view label;
+		std::string_view text;
+	};
 
-	nng::msg mRequest;
-#if TEST_MSG_RAW
-	mRequest = string_to_msg(
-R"**(PATCH /voices/1 XTELL/0
+	MsgRaw raws[] =
+	{
+		{Msg::TYPE::REQUEST, "Full Request",
+		R"**(PATCH /voices/1 Tell/0
 Content-Type:		application/json 	 
 
-{"attributes": {"slide_mode": "hold"}})**");
-#else
+{"attributes": {"slide_mode": "hold"}})**"},
+		{Msg::TYPE::REPLY, "Full Reply",
+R"**(Tell/0 200 OK
+Content-Type:		application/json 	 
+
+{"attributes": {"midi_pitch": 64.729}})**"},
+		{Msg::TYPE::REPORT,  "Full Report",
+R"**(/voices/1 Tell/0 201 Created
+Content-Type:		application/json 	 
+
+{"attributes": {"midi_pitch": 64.729}})**"},
+		{Msg::TYPE::REQUEST, "Min Request", "GET /a Tell/0" "\n\n"},
+		{Msg::TYPE::REPLY, "Min Reply", "Tell/0 404 Not Found" "\n\n"},
+		{Msg::TYPE::REPORT,  "Min Report", "/a Tell/0 201 Created" "\n\n"},
+	};
+
+	struct MsgTest
+	{
+		Msg::TYPE   type;
+		std::string label;
+		nng::msg    msg;
+
+		MsgTest(Msg::TYPE t, std::string_view l, nng::msg &&m) : type(t), label(l), msg(std::move(m)) {}
+	};
+
+	std::list<MsgTest> tests;
+
+	for (auto &raw : raws)
+	{
+		tests.emplace_back(raw.type, std::string(raw.label) + " (raw)"s, string_to_msg(raw.text));
+	}
+
 	{
 		auto msg = WriteRequest("/voices/1", MethodCode::PATCH);
 		msg.writeHeader("Content-Type", "application/json");
 		msg.writeBody() << R"*({"attributes": {"slide_mode": "hold"}})*";
-		mRequest = msg.release();
+		tests.emplace_back(Msg::TYPE::REQUEST, "Full Request", msg.release());
 	}
-#endif
 
-	nng::msg mReply;
-#if TEST_MSG_RAW
-	mReply = string_to_msg(
-R"**(XTELL/0 200 OK
-Content-Type:		application/json 	 
-
-{"attributes": {"midi_pitch": 64.729}})**");
-#else
 	{
 		auto msg = WriteReply();
 		msg.writeHeader("Content-Type", "application/json");
 		msg.writeBody() << R"*({"attributes": {"midi_pitch": 64.729}})*";
-		mReply = msg.release();
+		tests.emplace_back(Msg::TYPE::REPLY, "Generated Reply", msg.release());
 	}
-#endif
 
-	nng::msg mReport;
-#if TEST_MSG_RAW
-	mReport = string_to_msg(
-R"**(/voices/1  200 
-Content-Type:		application/json 	 
-
-{"attributes": {"midi_pitch": 64.729}})**");
-#else
 	{
 		auto msg = WriteReport("/voices/1");
 		msg.writeHeader("Content-Type", "application/json");
 		msg.writeBody() << R"*({"attributes": {"midi_pitch": 64.729}})*";
-		mReport = msg.release();
+		tests.emplace_back(Msg::TYPE::REPORT, "Generated Report", msg.release());
 	}
-#endif
 
-	MsgView::Request request;
-	MsgView::Reply   reply;
-	MsgView::Report  report;
-	try
+	for (auto &test : tests)
 	{
-		request  = MsgView::Request(mRequest);
-		cout << "Request parsed..." << endl;
-		reply    = MsgView::Reply(mReply);
-		cout << "Reply parsed..." << endl;
-		report = MsgView::Report(mReport);
-		cout << "Report parsed..." << endl;
-	}
-	catch (MsgException e)
-	{
-		cout << "Error parsing message: " << e.what() << endl;
-		cout << "  At location: `" << std::string_view(e.position, e.length) << '`' << endl;
+		// ...
+		try
+		{
+			MsgView view_man(test.msg, test.type);
+
+			MsgView view_auto(test.msg);
+
+			if (view_auto.msgType() != test.type)
+			{
+				cout << "*** Detected wrong message type" << std::endl;
+				cout << "\tin case: " << test.label << std::endl;
+				cout << "\texpected " << test.type << ", got " << view_auto.msgType() << std::endl;
+			}
+
+			print(view_man);
+		}
+		catch (MsgException &e)
+		{
+			cout << "*** Parse exception" << std::endl;
+			cout << "\tin case: " << test.label << std::endl;
+			cout << "\tError: " << e.what() << std::endl;
+			cout << "\tLocation: `" << std::string_view(e.position, e.length) << '`' << endl;
+		}
 	}
 
 	cout << endl;
 	cout << endl;
-
-
-	print(request);
-
-	print(reply);
-
-	print(report);
 }
 
 
@@ -180,6 +231,14 @@ int main(int argc, char **argv)
 	nng::inproc::register_transport();
 	nng::tcp::register_transport();
 	nng::tls::register_transport();
+
+
+	test_message_parsers();
+
+
+	cout << endl;
+	cout << "Press ENTER to continue..." << endl;
+	std::cin.get();
 
 
 	cout << endl;
@@ -218,14 +277,6 @@ int main(int argc, char **argv)
 	}
 	cout << "********* HTTP TEST END *********" << endl;
 	cout << endl;
-
-
-	/*test_message_parsers();
-
-
-	cout << endl;
-	cout << "Press ENTER to continue..." << endl;
-	std::cin.get();*/
 
 
 	using namespace std::chrono_literals;
