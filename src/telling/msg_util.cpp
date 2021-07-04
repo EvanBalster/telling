@@ -36,12 +36,12 @@ nng::msg MsgException::replyWithError(std::string_view error_context) const
 	}
 	body << what();
 
-	if (position && length)
+	if (excerpt.length())
 	{
 		body << "\r\nAt location:\r\n\t`"
-			<< std::string_view(position, length);
+			<< excerpt << "`";
 	}
-	body << "`\r\n";
+	body << "\r\n";
 
 	return msg.release();
 }

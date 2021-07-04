@@ -26,12 +26,12 @@ using std::cout;
 using std::endl;
 
 
-template<class T> void printStartLine(T &t) {cout << "\tStartLine: `" << t.startLine()    << "`" << endl;}
-template<class T> void printMethod   (T &t) {cout << "\tMethod:    `" << t.methodString() << "` -- parsed as HTTP " << t.method() << endl;}
-template<class T> void printURI      (T &t) {cout << "\tURI:       `" << t.uri()          << "`" << endl;}
-template<class T> void printProtocol (T &t) {cout << "\tProtocol:  `" << t.protocol()     << "`" << endl;}
-template<class T> void printStatus   (T &t) {cout << "\tStatus:    `" << t.statusString() << "` -- parsed as HTTP " << t.status() << ' ' << t.status().reasonPhrase() << endl;}
-template<class T> void printReason   (T &t) {cout << "\tReason:    `" << t.reason()       << "`" << endl;}
+template<class T> void printStartLine(T &t) {cout << "\tStartLine: `" << t.startLine()      << "`" << endl;}
+template<class T> void printMethod   (T &t) {cout << "\tMethod:    `" << t.methodString()   << "` -- interpret " << t.method() << endl;}
+template<class T> void printURI      (T &t) {cout << "\tURI:       `" << t.uri()            << "`" << endl;}
+template<class T> void printProtocol (T &t) {cout << "\tProtocol:  `" << t.protocolString() << "` -- interpret " << t.protocol() << endl;}
+template<class T> void printStatus   (T &t) {cout << "\tStatus:    `" << t.statusString()   << "` -- interpret " << t.status() << ' ' << t.status().reasonPhrase() << endl;}
+template<class T> void printReason   (T &t) {cout << "\tReason:    `" << t.reason()         << "`" << endl;}
 void printHeaders(const MsgView &msg)
 {
 	cout << "\tHeaders... (" << msg.headers().length() << " bytes)" << endl;
@@ -152,9 +152,13 @@ R"**(/voices/1 Tell/0 201 Created
 Content-Type:		application/json 	 
 
 {"attributes": {"midi_pitch": 64.729}})**"},
-		{Msg::TYPE::REQUEST, "Min Request", "GET /a Tell/0" "\n\n"},
-		{Msg::TYPE::REPLY, "Min Reply", "Tell/0 404 Not Found" "\n\n"},
-		{Msg::TYPE::REPORT,  "Min Report", "/a Tell/0 201 Created" "\n\n"},
+		{Msg::TYPE::REQUEST,  "Tiny Request", "GET /a"            "\n\n"},
+		{Msg::TYPE::REQUEST,   "Min Request", "GET "              "\n\n"},
+		{Msg::TYPE::REPLY,   "Small Reply",          "Tell/0 404" "\n\n"},
+		{Msg::TYPE::REPLY,     "Min Reply",                " 404" "\n\n"},
+		{Msg::TYPE::REPORT,  "Small Report",      "/a Tell/0 201" "\n\n"},
+		{Msg::TYPE::REPORT,   "Tiny Report",      "/a Tell/0"     "\n\n"},
+		{Msg::TYPE::REPORT,    "Min Report",      "/a"            "\n\n"},
 	};
 
 	struct MsgTest
@@ -208,8 +212,10 @@ Content-Type:		application/json
 				cout << "*** Detected wrong message type" << std::endl;
 				cout << "\tin case: " << test.label << std::endl;
 				cout << "\texpected " << test.type << ", got " << view_auto.msgType() << std::endl;
+				cout << "***" << endl << endl;
 			}
 
+			cout << test.label << " -- ";
 			print(view_man);
 		}
 		catch (MsgException &e)
@@ -217,7 +223,8 @@ Content-Type:		application/json
 			cout << "*** Parse exception" << std::endl;
 			cout << "\tin case: " << test.label << std::endl;
 			cout << "\tError: " << e.what() << std::endl;
-			cout << "\tLocation: `" << std::string_view(e.position, e.length) << '`' << endl;
+			cout << "\tLocation: `" << e.excerpt << '`' << endl;
+			cout << "***" << endl << endl;
 		}
 	}
 
@@ -322,8 +329,7 @@ int main(int argc, char **argv)
 				{
 					cout << "SVC-PULL recv" << endl;
 					cout << "\t...Error parsing message: " << e.what() << endl;
-					cout << "\t...  At location: `"
-						<< std::string_view(e.position, e.length) << '`' << endl;
+					cout << "\t...  At location: `" << e.excerpt << '`' << endl;
 					cout << endl;
 				}
 			}
@@ -348,8 +354,7 @@ int main(int argc, char **argv)
 				{
 					cout << "SVC-REP recv" << endl;
 					cout << "\t...Error parsing message: " << e.what() << endl;
-					cout << "\t...  At location: `"
-						<< std::string_view(e.position, e.length) << '`' << endl;
+					cout << "\t...  At location: `" << e.excerpt << '`' << endl;
 					cout << endl;
 
 					service.respond(e.replyWithError("Test Service"));
@@ -461,8 +466,7 @@ int main(int argc, char **argv)
 					{
 						cout << endl;
 						cout << "\t...Error parsing report: " << e.what() << endl;
-						cout << "\t...  At location: `"
-							<< std::string_view(e.position, e.length) << '`' << endl;
+						cout << "\t...  At location: `" << e.excerpt << '`' << endl;
 						cout << endl;
 					}
 				}
@@ -499,8 +503,7 @@ int main(int argc, char **argv)
 							{
 								cout << endl;
 								cout << "\t...Error parsing report: " << e.what() << endl;
-								cout << "\t...  At location: `"
-									<< std::string_view(e.position, e.length) << '`' << endl;
+								cout << "\t...  At location: `" << e.excerpt << '`' << endl;
 								cout << endl;
 							}
 						}

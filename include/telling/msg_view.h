@@ -53,17 +53,18 @@ namespace telling
 				headers are an unordered non-unique list of key-value properties based on HTTP headers.
 				data is the content of the message and can be anything (headers may describe it).
 		*/
-		Method            method        () const noexcept    {return Method     ::Parse(methodString());}
-		UriView           uri           () const noexcept    {return UriView(_string(_uri()));}
-		MsgProtocol       protocol      () const noexcept    {return MsgProtocol::Parse(protocolString());}
-		Status            status        () const noexcept    {return Status     ::Parse(statusString());}
-		std::string_view  reason        () const noexcept    {return _string_rem_nl(_reason_nl());}
+		Method           method        () const noexcept    {return Method     ::Parse(  methodString());}
+		UriView          uri           () const noexcept    {return UriView(                uriString());}
+		MsgProtocol      protocol      () const noexcept    {return MsgProtocol::Parse(protocolString());}
+		Status           status        () const noexcept    {return Status     ::Parse(  statusString());}
+		std::string_view reason        () const noexcept    {return _string(_reason());}
 
 		// Raw elements of start-line.
-		std::string_view  startLine     () const noexcept    {return _string_rem_nl(_start_nl());}
-		std::string_view  methodString  () const noexcept    {return _string(_method());}
-		std::string_view  protocolString() const noexcept    {return _string(_protocol());}
-		std::string_view  statusString  () const noexcept    {return _string(_status());}
+		std::string_view startLine     () const noexcept    {return _string(_startLine());}
+		std::string_view      uriString() const noexcept    {return _string(_uri());}
+		std::string_view   methodString() const noexcept    {return _string(_method());}
+		std::string_view protocolString() const noexcept    {return _string(_protocol());}
+		std::string_view   statusString() const noexcept    {return _string(_status());}
 
 		/*
 			Access the message headers, which can be iterated over.

@@ -132,8 +132,8 @@ namespace telling
 	class MsgException : public ReplyableException, public MsgError
 	{
 	public:
-		MsgException(MSG_ERROR _error, const char *_position, size_t _length = 0) :
-			error(_error), position(_position), length(_length) {}
+		MsgException(MSG_ERROR _error, std::string_view s, std::string_view info = {}) :
+			error(_error), excerpt(s), more_info(info) {}
 		virtual ~MsgException() {}
 
 		inline const char *what() const override
@@ -170,9 +170,9 @@ namespace telling
 
 
 	public:
-		MSG_ERROR         error;
-		const char *const position;
-		size_t            length;
+		MSG_ERROR   error;
+		std::string excerpt;
+		std::string more_info;
 	};
 
 
