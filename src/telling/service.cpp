@@ -27,19 +27,22 @@ void Service_Base::registerURI(std::string_view serverID)
 }
 
 
-Service::Service(std::weak_ptr<ServiceHandler_Base> _handler,
-	std::string _uri, std::string_view serverID)
-	: Service_Base(_uri, serverID),
+Service::Service(std::string _uri, std::string_view serverID)
+	: Service_Base(_uri, serverID)
 	//handler(std::move(_handler)),
-	_replier  (_handler),
-	_puller   (_handler),
-	_publisher(_handler)
 {
 	listen(inProcAddress());
 }
 Service::~Service()
 {
 	close();
+}
+
+void Service::initialize(std::weak_ptr<ServiceHandler_Base> _handler)
+{
+	_replier  .initialize(_handler);
+	_puller   .initialize(_handler);
+	_publisher.initialize(_handler);
 }
 
 

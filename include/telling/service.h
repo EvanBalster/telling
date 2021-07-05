@@ -59,9 +59,18 @@ namespace telling
 	class Service : public Service_Base
 	{
 	public:
-		Service(std::weak_ptr<ServiceHandler_Base> handler,
-			std::string _uri, std::string_view serverID = DefaultServerID());
+		Service(std::string _uri, std::string_view serverID = DefaultServerID());
 		~Service();
+
+		Service(std::weak_ptr<ServiceHandler_Base> handler,
+			std::string _uri, std::string_view serverID = DefaultServerID()) :
+			Service(_uri, serverID)    {initialize(handler);}
+
+		/*
+			Initialize service with a handler.
+				Only one handler is allowed at a time.
+		*/
+		void initialize(std::weak_ptr<ServiceHandler_Base> handler);
 
 		/*
 			Publish a message to a topic (URI).

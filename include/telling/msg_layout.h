@@ -88,5 +88,6 @@ namespace telling
 		// Lengths of start-line components, including space where suffixed
 		uint16_t _sl_len;
 		uint8_t _uri_pos, _prt_rpos, _sts_rpos, _sl_nl;
+		// TODO: _prt_rpos is 0 for "GET x "
 	};
 }

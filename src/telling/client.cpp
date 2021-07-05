@@ -25,14 +25,17 @@ void ClientHandler::async_sent(Pushing push)
 }
 
 
-Client::Client(std::weak_ptr<ClientHandler_Base> _handler) :
-	//handler(std::move(_handler)),
-	_requester (_handler),
-	_subscriber(_handler),
-	_pusher    (_handler)
+Client::Client()
 {
 }
 Client::~Client()
 {
 	close();
+}
+
+void Client::initialize(std::weak_ptr<ClientHandler_Base> _handler)
+{
+	_requester .initialize(_handler);
+	_subscriber.initialize(_handler);
+	_pusher    .initialize(_handler);
 }

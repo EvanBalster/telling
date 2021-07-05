@@ -53,8 +53,15 @@ namespace telling
 	class Client : public Client_Base
 	{
 	public:
-		Client(std::weak_ptr<ClientHandler_Base> handler);
+		Client();
 		~Client();
+
+		/*
+			Initialize client with a handler.
+				Only one handler is allowed at a time.
+		*/
+		void initialize(std::weak_ptr<ClientHandler_Base> handler);
+		Client(std::weak_ptr<ClientHandler_Base> handler)    : Client() {initialize(handler);}
 
 		/*
 			Push a message to the server. Throws nng::exception on failure.

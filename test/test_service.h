@@ -1,9 +1,12 @@
 #pragma once
 
 
-#include <telling/msg_view.h>
+#include <chrono>
+#include <life_lock.h>
+
 #include <telling/msg_writer.h>
 #include <telling/service.h>
+#include <telling/service_reactor.h>
 #include <telling/service_reactor.h>
 
 
@@ -11,74 +14,99 @@ namespace telling_test
 {
 	using namespace telling;
 
-	class Test_Responder : public Service
+	struct Service_PollingThread
+	{
+		std::string uri;
+		std::string reply_text;
+		size_t      lifetime_ms = 7500;
+
+		void run();
+	};
+
+	class Service_AIO : public Service
 	{
 	public:
-		class Receiver : public Reactor
+		class Handler : public Reactor
 		{
 		public:
-			std::mutex         mtx;
-			Test_Responder *service;
+			Service_AIO *service;
 
 			const std::string txt_reply;
 
+			size_t lifetime_ms;
+			std::chrono::steady_clock::time_point created;
+
 		public:
-			Receiver(Test_Responder &_service, std::string _reply) : service(&_service), txt_reply(_reply) {}
-			~Receiver() {}
+			Handler(Service_AIO &_service, std::string _reply, size_t _lifetime_ms) : 
+				Reactor(_service.uri),
+				service(&_service), txt_reply(_reply),
+				lifetime_ms(_lifetime_ms),
+				created(std::chrono::steady_clock::now()) {}
+			~Handler() {}
 
-			void recv_get(QueryID queryID, const MsgView::Request &request, nng::msg &&msg) final
+			Methods allowed(UriView) const noexcept override
 			{
-				MsgView::Request req;
-				try
-				{
-					req = msg;
-				}
-				catch (MsgException e)
-				{
-					if (queryID) return DECLINE;
-					else         return e.replyWithError("ServiceTest_Async");
-				}
+				return MethodCode::GET;
+			}
 
-				std::lock_guard g(mtx);
-				if (!service) return;
-
-				if (queryID)
+			void async_get(Query query, Msg::Request &&request) final
+			{
+				if ((std::chrono::steady_clock::now() - created) > std::chrono::milliseconds(lifetime_ms))
+				{
+					throw status_exceptions::NotFound();
+				}
+				
+				
+				if (query.reply)
 				{
 					++service->request_count;
 
 					auto msg = WriteReply();
 					msg.writeHeader("Content-Type", "text/plain");
-					msg.writeData(service->uri);
-					msg.writeData("\r\n");
-					msg.writeData(txt_reply);
-					return msg.release();
+					msg.writeBody()
+						<< service->uri
+						<< "\r\n"
+						<< txt_reply;
+					query.reply(msg.release());
 				}
 				else
 				{
-					// Ignore pushed messages
+					// Rebroadcast
 					++service->push_count;
+
+					// Re-publish the pulled message
+					auto report = WriteReport(request.uri());
+					for (auto header : request.headers())
+					{
+						report.writeHeader(header.name, header.value);
+					}
+					report.writeHeader("X-Republished-By", service->uri);
+					report.writeBody() << request.body() << " (republished)";
+					service->publish(report.release());
 				}
 			}
 		};
 
 	public:
-		Test_Responder(std::string uri, std::string reply) :
-			Service(std::make_shared<Receiver>(*this, reply), uri)
+		Service_AIO(std::string uri, std::string reply, size_t lifetime_ms = 7500) :
+			Service(uri),
+			handler(*this, reply, lifetime_ms)
 		{
-
+			initialize(handler.get_weak());
 		}
-		~Test_Responder()
+		~Service_AIO()
 		{
-
 		}
 
 	public:
+		edb::life_locked<Handler> handler;
+
 		volatile size_t
 			request_count = 0,
 			push_count    = 0;
 	};
 
-
+#if 0
 	class Test_Reflector : public Service
 	{
 	public:
@@ -145,4 +173,5 @@ namespace telling_test
 			request_count = 0,
 			push_count    = 0;
 	};
+#endif
 }

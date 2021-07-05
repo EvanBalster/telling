@@ -19,6 +19,8 @@
 
 #include <telling/http_client.h>
 
+#include "test_service.h"
+
 
 using namespace telling;
 
@@ -116,7 +118,7 @@ std::ostream &operator<<(std::ostream &o, Msg::TYPE t)
 	}
 }
 
-void test_message_parsers()
+void test_message_parsers(bool should_print)
 {
 	using namespace std::literals;
 
@@ -181,23 +183,25 @@ Content-Type:		application/json
 		auto msg = WriteRequest("/voices/1", MethodCode::PATCH);
 		msg.writeHeader("Content-Type", "application/json");
 		msg.writeBody() << R"*({"attributes": {"slide_mode": "hold"}})*";
-		tests.emplace_back(Msg::TYPE::REQUEST, "Full Request", msg.release());
+		tests.emplace_back(Msg::TYPE::REQUEST, "Gen. Request", msg.release());
 	}
 
 	{
 		auto msg = WriteReply();
 		msg.writeHeader("Content-Type", "application/json");
 		msg.writeBody() << R"*({"attributes": {"midi_pitch": 64.729}})*";
-		tests.emplace_back(Msg::TYPE::REPLY, "Generated Reply", msg.release());
+		tests.emplace_back(Msg::TYPE::REPLY, "Gen. Reply", msg.release());
 	}
 
 	{
 		auto msg = WriteReport("/voices/1");
 		msg.writeHeader("Content-Type", "application/json");
 		msg.writeBody() << R"*({"attributes": {"midi_pitch": 64.729}})*";
-		tests.emplace_back(Msg::TYPE::REPORT, "Generated Report", msg.release());
+		tests.emplace_back(Msg::TYPE::REPORT, "Gen. Report", msg.release());
 	}
 
+	cout << "=== Begin message I/O tests..." << endl;
+	size_t issue_count = 0;
 	for (auto &test : tests)
 	{
 		// ...
@@ -213,10 +217,18 @@ Content-Type:		application/json
 				cout << "\tin case: " << test.label << std::endl;
 				cout << "\texpected " << test.type << ", got " << view_auto.msgType() << std::endl;
 				cout << "***" << endl << endl;
+				++issue_count;
 			}
 
-			cout << test.label << " -- ";
-			print(view_man);
+			if (should_print)
+			{
+				cout << test.label << ": OK -- ";
+				print(view_man);
+			}
+			else
+			{
+				cout << test.label << ": OK" << endl;
+			}
 		}
 		catch (MsgException &e)
 		{
@@ -225,8 +237,10 @@ Content-Type:		application/json
 			cout << "\tError: " << e.what() << std::endl;
 			cout << "\tLocation: `" << e.excerpt << '`' << endl;
 			cout << "***" << endl << endl;
+			++issue_count;
 		}
 	}
+	cout << "=== Completed message I/O tests with " << issue_count << " issues..." << endl;
 
 	cout << endl;
 	cout << endl;
@@ -240,7 +254,7 @@ int main(int argc, char **argv)
 	nng::tls::register_transport();
 
 
-	test_message_parsers();
+	test_message_parsers(false);
 
 
 	cout << endl;
@@ -287,113 +301,6 @@ int main(int argc, char **argv)
 
 
 	using namespace std::chrono_literals;
-	
-
-	auto run_service_thread = [](std::string uri, std::string reply_text, size_t lifetime_ms = 7500) -> void
-	{
-		unsigned timer = 0;
-		unsigned timerTotal = 0;
-
-		size_t recvCount = 0;
-
-		std::this_thread::sleep_for(2500ms);
-
-		cout << "==== Creating service." << endl;
-		{
-		Service_Box service(uri);
-
-		while (timerTotal < lifetime_ms)
-		{
-			nng::msg msg;
-
-			while (service.pull(msg))
-			{
-				++recvCount;
-				try
-				{
-					MsgView::Request req(msg);
-					//printStartLine(req);
-					//printHeaders(req);
-
-					// Re-publish the pulled message
-					auto report = WriteReport(req.uri());
-					for (auto header : req.headers())
-					{
-						report.writeHeader(header.name, header.value);
-					}
-					report.writeHeader("X-Republished-By", uri);
-					report.writeBody() << req.body() << " (republished)";
-					service.publish(report.release());
-				}
-				catch (MsgException e)
-				{
-					cout << "SVC-PULL recv" << endl;
-					cout << "\t...Error parsing message: " << e.what() << endl;
-					cout << "\t...  At location: `" << e.excerpt << '`' << endl;
-					cout << endl;
-				}
-			}
-
-			while (service.receive(msg))
-			{
-				++recvCount;
-				//cout << "SVC-REP recv: ";
-				try
-				{
-					MsgView::Request req(msg);
-					//printStartLine(req);
-					//printHeaders(req);
-					//cout << "[" << req.startLine() << "] `" << req.dataString() << "`" << endl;
-
-					auto reply = WriteReply();
-					reply.writeHeader("Content-Type", "text/plain");
-					reply.writeBody() << reply_text;
-					service.respond(reply.release());
-				}
-				catch (MsgException e)
-				{
-					cout << "SVC-REP recv" << endl;
-					cout << "\t...Error parsing message: " << e.what() << endl;
-					cout << "\t...  At location: `" << e.excerpt << '`' << endl;
-					cout << endl;
-
-					service.respond(e.replyWithError("Test Service"));
-				}
-			}
-
-			std::this_thread::sleep_for(10ms);
-			timer += 10;
-			timerTotal += 10;
-
-			if (recvCount == 0)
-			{
-				if (timer > 100)
-				{
-					timer = 0;
-					//service.broadcastServiceRegistration();
-				}
-			}
-			else
-			{
-				if (timer > 1000)
-				{
-					timer = 0;
-
-					auto report = WriteReport(uri);
-					report.writeHeader("Content-Type", "text/plain");
-					report.writeBody() << "This is a heartbeat message!";
-					service.publish(report.release());
-				}
-			}
-		}
-
-		cout << "==== Destroying service." << endl;
-		}
-		cout << "==== Destroyed service..." << endl;
-		std::this_thread::sleep_for(2000ms);
-		cout << "==== Destroyed service, a little while ago." << endl;
-		cout << endl;
-	};
 
 
 
@@ -417,7 +324,22 @@ int main(int argc, char **argv)
 
 
 	cout << "==== Starting service." << endl;
-	std::thread service_thread(run_service_thread, service_uri, "There are many voices to choose from.");
+
+#define SERVICE_AIO 0
+
+#if SERVICE_AIO
+	auto service_aio = new telling_test::Service_AIO(
+		service_uri,
+		"There are many voices to choose from."
+	);
+#else
+	telling_test::Service_PollingThread sPoll =
+	{
+		service_uri,
+		"There are many voices to choose from."
+	};
+	std::thread service_thread(&decltype(sPoll)::run, &sPoll);
+#endif
 
 
 
@@ -572,10 +494,17 @@ int main(int argc, char **argv)
 	cout << "==== Destroyed client." << endl;
 	cout << endl;
 	
-	cout << "==== Join service thread." << endl;
-	service_thread.join();
-	cout << "==== Joined service thread." << endl;
+#if SERVICE_AIO
+	cout << "==== Stop service (polling thread)." << endl;
+	delete service_aio;
+	cout << "==== Stopped service (polling thread)." << endl;
 	cout << endl;
+#else
+	cout << "==== Stop service (polling thread)." << endl;
+	service_thread.join();
+	cout << "==== Stopped service (polling thread)." << endl;
+	cout << endl;
+#endif
 
 	cout << "==== Destroying server." << endl;
 	server = nullptr;
