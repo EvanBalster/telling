@@ -47,29 +47,46 @@ namespace nng
 
 
 	public:
-		basic_msgbuf()  noexcept    : _body(nullptr), _ncap(0) {}
+		basic_msgbuf()  noexcept    : _msg(nullptr) {}
 		~basic_msgbuf() noexcept    {close();}
-
-		basic_msgbuf* open(nng::msg_view msg, std::ios::openmode mode)    {return open(msg.body(), mode);}
-		bool          is_open() const noexcept                            {return _body.get_msg();}
-		void          close() noexcept                                    {if (is_open()) *this = basic_msgbuf();}
+		
+		bool          is_open() const noexcept                             {return _msg;}
+		void          close() noexcept                                     {if (is_open()) *this = basic_msgbuf();}
 
 		/*
 			Open a message for reading/writing.
 		*/
-		basic_msgbuf* open(nng::msg_body body, std::ios::openmode mode)
+		basic_msgbuf* open(nng::msg_view msg,  openmode mode)    {return open(msg .get(),     mode);}
+		basic_msgbuf* open(nng::msg_body body, openmode mode)    {return open(body.get_msg(), mode);}
+		basic_msgbuf* open(nng_msg*      msg,  openmode mode)    {return open_range(msg, mode, 0);}
+
+		/*
+			Open a sub-range of a message.
+				byte_offset allows I/O to a later section of the body (eg, after application headers).
+				bytes_max allows the readable/writable range (and hence message size) to be limited.
+		*/
+		basic_msgbuf* open_range(nng::msg_view msg,  openmode mode, size_t byte_offset, size_t bytes_max = ~size_t(0))    {open_range(msg.get(),      mode, byte_offset, bytes_max);}
+		basic_msgbuf* open_range(nng::msg_body body, openmode mode, size_t byte_offset, size_t bytes_max = ~size_t(0))    {open_range(body.get_msg(), mode, byte_offset, bytes_max);}
+		basic_msgbuf* open_range(nng_msg*      msg,  openmode mode, size_t byte_offset, size_t bytes_max = ~size_t(0))
 		{
 			// Validate
-			if (!body.get_msg() || !(mode & (std::ios::in|std::ios::out)))
+			if (!msg || !(mode & (std::ios::in|std::ios::out)))
 				return nullptr;
 
 			// Truncate
-			if (mode & std::ios::trunc) _body.chop(_body.size());
+			if (mode & std::ios::trunc) nng_msg_realloc(msg, byte_offset);
+			else
+			{
+				size_t len = nng_msg_len(msg);
+				if (byte_offset > len) throw nng::exception(nng::error::msgsize,
+					"basic_msgbuf::open_range(byte_offset > msg.len)");
+			}
 
 			// Setup
-			_body   = body;
-			_ncap = (body.size()/sizeof(char_type));
-			_mode   = mode;
+			_msg  = msg;
+			_mode = mode;
+			_byte_off = byte_offset;
+			_byte_max = bytes_max;
 
 			char_type *start = _start(),
 				*gpos = start,
@@ -101,13 +118,11 @@ namespace nng
 			size_t need_capac = _count()+n;
 			if (need_capac > _capac())
 			{
-				if (need_capac < 32) need_capac = 32;
-				if (need_capac < 2*_capac()) need_capac = 2*_capac();
-				_grow(need_capac);
+				if (!_auto_grow(need_capac)) return 0;
 			}
 
 			// Write data to message
-			_body.append(nng::view(s, n));
+			nng_msg_append(_msg, (void*) s, n*sizeof(char_type));
 			this->setp(_start(), this->pptr() + n, _p_end());
 			return n;
 		}
@@ -160,19 +175,20 @@ namespace nng
 		{
 			if (!_is_writing()) return traits_type::eof();
 
-			// Decide on new capacity
-			size_t new_capac = (_body.size()/sizeof(char_type)) * 2;
-			if (new_capac < 32) new_capac = 32;
+			if (_count() >= _capac())
+			{
+				// Automatically grow the buffer
+				if (!_auto_grow()) return traits_type::eof();
+			}
 
-			_grow(new_capac);
-
-			// Put character without advancing psoition.
+			// Put character without advancing position.
+			auto pptr = this->pptr();
 			*this->pptr() = c;
 			this->setp(_start(), this->pptr()+1, _p_end());
 			return traits_type::to_int_type(c);
 		}
 		
-		pos_type seekpos(std::streampos _pos, std::ios::openmode which = std::ios::in | std::ios::out) override
+		pos_type seekpos(std::streampos _pos, openmode which = std::ios::in | std::ios::out) override
 		{
 			_sync_length();
 			size_t pos = ((_pos < 0) ? 0 : size_t(_pos));
@@ -184,7 +200,7 @@ namespace nng
 			return pos;
 		}
 
-		pos_type seekoff(off_type off, std::ios::seekdir way, std::ios::openmode which = std::ios::in | std::ios::out) override
+		pos_type seekoff(off_type off, std::ios::seekdir way, openmode which = std::ios::in | std::ios::out) override
 		{
 			char_type *gp, *pp;
 			switch (way)
@@ -205,15 +221,18 @@ namespace nng
 
 
 	protected:
-		nng::msg_body      _body;
-		std::ios::openmode _mode = 0;
-		size_t             _ncap = 0; // Known capacity (elements)
+		nng_msg *_msg;
+		openmode _mode = 0;
+		size_t   _byte_off = 0, _byte_max = ~size_t(0);
 
-		char_type *_start() const    {return _body.data<char_type>();}
-		char_type *_g_end() const    {return _body.data<char_type>() + _body.size()/sizeof(char_type);}
-		char_type *_p_end() const    {return _start() + _ncap;}
-		size_t     _capac() const    {return _p_end() - _start();}
-		size_t     _count() const    {return _g_end() - _start();}
+		size_t     _sizeb(size_t n) const    {n -= _byte_off; return (n > _byte_max) ? _byte_max : n;}
+
+		char_type *_start() const    {return static_cast<char_type*>(static_cast<char*>(nng_msg_body(_msg))+_byte_off);}
+		char_type *_g_end() const    {return _start() + _count();}
+		char_type *_p_end() const    {return _start() + _capac();}
+		size_t     _capac() const    {return _sizeb(nng_msg_capacity(_msg))/sizeof(char_type);}
+		size_t     _count() const    {return _sizeb(nng_msg_len     (_msg))/sizeof(char_type);}
+		size_t     _limit() const    {return _byte_max                     /sizeof(char_type);}
 
 		bool _is_writing() const noexcept    {return _mode & std::ios::out;}
 		bool _is_reading() const noexcept    {return _mode & std::ios::in;}
@@ -221,7 +240,22 @@ namespace nng
 		void _sync_length() noexcept
 		{
 			if (this->pptr() > _g_end())
-				nng_msg_realloc(_body.get_msg(), static_cast<char*>(this->pptr())-_body.data<char>());
+				nng_msg_realloc(_msg, static_cast<char*>(this->pptr())-static_cast<char*>(_start()));
+		}
+
+		// Increase capacity, so that the resulting capacity is at least min_capac.
+		bool _auto_grow(size_t min_capac = 32)
+		{
+			size_t capac = _capac();
+			size_t max_capac = _limit();
+			
+			if (min_capac > max_capac || capac >= max_capac) return false;
+
+			capac = capac * 2;
+			if      (capac > max_capac) capac = max_capac;
+			else if (capac < min_capac) capac = min_capac;
+			_grow(capac);
+			return true;
 		}
 
 		void _grow(size_t new_capac)
@@ -229,18 +263,18 @@ namespace nng
 			if (new_capac < _capac()) return;
 
 			// Reallocate message and update pointers
-			size_t g_ind, p_ind, written_elems = _body.size() / sizeof(char_type);
-			if (_is_reading()) g_ind = this->gptr() - this->eback();
-			if (_is_writing()) p_ind = this->pptr() - this->pbase();
+			char_type *start;
+			size_t g_ind, p_ind, written_elems = _count();
+			start = _start();
+			if (_is_reading()) g_ind = this->gptr() - _start();
+			if (_is_writing()) p_ind = this->pptr() - _start();
 
-			// Reallocate message
-			auto code = nng_msg_realloc(_body.get_msg(), new_capac * sizeof(char_type));
-			_body.chop((new_capac - written_elems) * sizeof(char_type));
+			// Reserve more space
+			auto code = nng_msg_reserve(_msg, new_capac * sizeof(char_type));
 			if (code != 0) throw nng::exception(code, "nng_msg_realloc");
 
 			// Update addresses
-			char_type *start = _start();
-			_ncap = new_capac;
+			start = _start();
 			if (_is_reading()) this->setg(start, start+g_ind, _g_end());
 			if (_is_writing()) this->setp(start, start+p_ind, _p_end());
 		}
@@ -256,18 +290,28 @@ namespace nng
 	class basic_msgstream_ : protected basic_msgbuf<Elem, Traits>, public StreamBase
 	{
 	protected:
+		using openmode = std::ios::openmode;
 		using _mebuf = basic_msgbuf<Elem, Traits>;
 		_mebuf *_asbuf() noexcept    {return static_cast<_mebuf*>(this);}
 
 
 	public:
-		void open(nng::msg_body msg, std::ios::openmode mode = ModeDefault)           {_mebuf::open(msg, mode&ModeForce);}
-		void open(nng::msg_view msg, std::ios::openmode mode = ModeDefault)           {_mebuf::open(msg, mode&ModeForce);}
+		// Open methods behave like their equivalents in msgbuf.
+		void open(nng::msg_body msg, openmode mode = ModeDefault)           {_mebuf::open(msg, mode&ModeForce);}
+		void open(nng::msg_view msg, openmode mode = ModeDefault)           {_mebuf::open(msg, mode&ModeForce);}
+		void open(nng_msg*      msg, openmode mode = ModeDefault)           {_mebuf::open(msg, mode&ModeForce);}
+
+		void open_range(nng::msg_body msg, openmode mode, size_t byte_offset, size_t bytes_max = ~size_t(0))           {_mebuf::open_range(msg, mode&ModeForce, byte_offset, bytes_max);}
+		void open_range(nng::msg_view msg, openmode mode, size_t byte_offset, size_t bytes_max = ~size_t(0))           {_mebuf::open_range(msg, mode&ModeForce, byte_offset, bytes_max);}
+		void open_range(nng_msg*      msg, openmode mode, size_t byte_offset, size_t bytes_max = ~size_t(0))           {_mebuf::open_range(msg, mode&ModeForce, byte_offset, bytes_max);}
+
+		bool is_open() noexcept                                                       {_mebuf::is_open();}
 		void close() noexcept                                                         {_mebuf::close();}
 
-		basic_msgstream_(const _mebuf &buf)                                           : StreamBase(_asbuf()), _mebuf(buf) {}
-		basic_msgstream_(nng::msg_body msg, std::ios::openmode mode = ModeDefault)    : StreamBase(_asbuf()) {_mebuf::open(msg, mode&ModeForce);}
-		basic_msgstream_(nng::msg_view msg, std::ios::openmode mode = ModeDefault)    : StreamBase(_asbuf()) {_mebuf::open(msg, mode&ModeForce);}
+		basic_msgstream_(const _mebuf &buf)                                                                                        : StreamBase(_asbuf()), _mebuf(buf) {}
+		basic_msgstream_(nng::msg_body msg, openmode mode = ModeDefault, size_t byte_offset = 0, size_t bytes_max = ~size_t(0))    : StreamBase(_asbuf()) {_mebuf::open_range(msg, mode&ModeForce, byte_offset, bytes_max);}
+		basic_msgstream_(nng::msg_view msg, openmode mode = ModeDefault, size_t byte_offset = 0, size_t bytes_max = ~size_t(0))    : StreamBase(_asbuf()) {_mebuf::open_range(msg, mode&ModeForce, byte_offset, bytes_max);}
+		basic_msgstream_(nng_msg*      msg, openmode mode = ModeDefault, size_t byte_offset = 0, size_t bytes_max = ~size_t(0))    : StreamBase(_asbuf()) {_mebuf::open_range(msg, mode&ModeForce, byte_offset, bytes_max);}
 
 		basic_msgstream_()                                                            : StreamBase(_asbuf()) {}
 		~basic_msgstream_() noexcept {}

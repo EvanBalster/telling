@@ -15,9 +15,9 @@ nng::msg ReplyableException::replyWithError(std::string_view error_context) cons
 
 	if (error_context.length())
 	{
-		body << " in `" << error_context << "`:\r\n\t";
+		body << error_context << ": ";
 	}
-	body << what() << "\r\n";
+	body << what();
 
 	return msg.release();
 }

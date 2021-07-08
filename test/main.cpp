@@ -325,7 +325,7 @@ int main(int argc, char **argv)
 
 	cout << "==== Starting service." << endl;
 
-#define SERVICE_AIO 0
+#define SERVICE_AIO 1
 
 #if SERVICE_AIO
 	auto service_aio = new telling_test::Service_AIO(
@@ -366,10 +366,7 @@ int main(int argc, char **argv)
 		client.subscribe("");
 
 
-		bool clientKeepGoing = true;
-
-
-		while (clientKeepGoing && clientTimeTotal < 12'500)
+		while (clientTimeTotal < 12'500)
 		{
 			{
 				nng::msg msg;
@@ -414,6 +411,7 @@ int main(int argc, char **argv)
 								//print(reply);
 								cout << "[" << reply.startLine() << "] `" << reply.bodyString() << "`" << endl;
 								cout << endl;
+								//print(reply);
 
 								if (reply.status().code == StatusCode::NotFound)
 								{

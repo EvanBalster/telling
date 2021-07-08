@@ -34,7 +34,7 @@ namespace telling
 			const std::string message;
 
 		public:
-			Err_()                        : message(Status(CODE).toString()) {}
+			Err_()                        : message(std::string(Status(CODE).reasonPhrase())) {}
 			Err_(std::string _message)    : message(_message) {}
 
 			Status replyStatus() const noexcept override     {return CODE;}
@@ -89,19 +89,22 @@ namespace telling
 
 
 	/*
-		An exception carrying a status.
+		An exception carrying a dynamic status.
 	*/
-	class StatusException : public std::exception
+	class StatusException : public ReplyableException
 	{
 	public:
 		const Status      status;
 		const std::string message;
 
 	public:
-		StatusException(Status _status)                          : status(_status), message(_status.toString()) {}
+		StatusException(Status _status)                          : status(_status), message(_status.reasonPhrase()) {}
 		StatusException(Status _status, std::string _message)    : status(_status), message(std::move(_message)) {}
 
 		inline const char *what() const override    {return message.c_str();}
+
+		Status replyStatus() const noexcept override     {return status;}
+
 	};
 
 

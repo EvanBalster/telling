@@ -80,7 +80,11 @@ namespace telling
 		template<typename T>
 		const T*          bodyData()   const noexcept    {return msg.body().data<const char>() + _p_body;}
 
-		nng::imsgstream   readBody()   const noexcept    {return nng::imsgstream(msg);}
+		// IOstreams with message body
+		nng::imsgstream   readBody()   const noexcept    {return nng::imsgstream(bodyBuf(std::ios::in | std::ios::binary));}
+
+
+		nng::msgbuf       bodyBuf (std::ios::openmode mode)   const noexcept    {nng::msgbuf buf; buf.open_range(msg, mode, _p_body); return buf;}
 
 
 
