@@ -151,7 +151,7 @@ struct nng_sockaddr_abstract {
 // larger than this without breaking binary compatibility.
 struct nng_sockaddr_storage {
 	uint16_t sa_family;
-	uint16_t sa_pad[64];
+	uint64_t sa_pad[16];
 };
 
 typedef struct nng_sockaddr_inproc   nng_sockaddr_inproc;
@@ -594,6 +594,8 @@ NNG_DECL void nng_sleep_aio(nng_duration, nng_aio *);
 NNG_DECL int      nng_msg_alloc(nng_msg **, size_t);
 NNG_DECL void     nng_msg_free(nng_msg *);
 NNG_DECL int      nng_msg_realloc(nng_msg *, size_t);
+NNG_DECL int      nng_msg_reserve(nng_msg *, size_t);
+NNG_DECL size_t   nng_msg_capacity(nng_msg *);
 NNG_DECL void *   nng_msg_header(nng_msg *);
 NNG_DECL size_t   nng_msg_header_len(const nng_msg *);
 NNG_DECL void *   nng_msg_body(nng_msg *);
