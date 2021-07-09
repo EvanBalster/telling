@@ -11,12 +11,7 @@
 	This header implements C++ iostreams for nng::msg.
 
 	Currently unsupported features:
-		- Seeking
 		- Automatic append seeking
-
-	Supported:
-		- ios::trunc
-		- ios
 
 	streambuf -- msgbuf
 	iostream  -- msgstream
