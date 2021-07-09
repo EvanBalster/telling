@@ -51,11 +51,18 @@ namespace telling_test
 
 			void async_get(Query query, Msg::Request &&request) final
 			{
-				if ((std::chrono::steady_clock::now() - created) > std::chrono::milliseconds(lifetime_ms))
+				auto now = std::chrono::steady_clock::now();
+				if ((now - created) > std::chrono::milliseconds(lifetime_ms))
 				{
 					throw status_exceptions::NotFound();
 				}
-				
+
+				long long req_time = 0;
+				for (auto &h : request.headers())
+				{
+					if (h.name == "Req-Time")
+						req_time = std::stoll(std::string(h.value));
+				}
 				
 				if (query.reply)
 				{
@@ -63,6 +70,8 @@ namespace telling_test
 
 					auto msg = WriteReply();
 					msg.writeHeader("Content-Type", "text/plain");
+					if (req_time) msg.writeHeader("Req-Time", std::to_string(req_time));
+					msg.writeHeader("Rep-Time", std::to_string(now.time_since_epoch().count()));
 					msg.writeBody()
 						<< service->uri
 						<< "\r\n"
@@ -80,9 +89,16 @@ namespace telling_test
 					{
 						report.writeHeader(header.name, header.value);
 					}
+					report.writeHeader("Rep-Time", std::to_string(now.time_since_epoch().count()));
 					report.writeHeader("X-Republished-By", service->uri);
 					report.writeBody() << request.body() << " (republished)";
 					service->publish(report.release());
+				}
+
+				if (req_time)
+				{
+					std::cout << "GET Latency to server: " << std::chrono::duration_cast<std::chrono::microseconds>
+						(now.time_since_epoch() - decltype(now.time_since_epoch())(req_time)).count() << " us" << std::endl;
 				}
 			}
 		};

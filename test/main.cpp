@@ -247,11 +247,33 @@ Content-Type:		application/json
 }
 
 
+template<typename x = char> constexpr x BUGGO()    {return x(0);}
+
+
 int main(int argc, char **argv)
 {
 	nng::inproc::register_transport();
 	nng::tcp::register_transport();
 	nng::tls::register_transport();
+
+	static const auto c = BUGGO();
+	static const auto i = BUGGO<int>();
+
+
+	{
+		int test_errs[34];
+		for (int i = 0; i < 32; ++i) test_errs[i] = i;
+		test_errs[32] = NNG_EINTERNAL;
+		test_errs[33] = NNG_ESYSERR | 0xc0000005;
+
+		for (int errcode : test_errs)
+		{
+			nng::exception ex(errcode, "test");
+			auto def = ex.code().default_error_condition();
+			cout << ex.code().category().name() << "\t" << errcode << "\t" << ex.what() << endl
+				<< def.category().name() << "\t" << def.value() << "\t" << def.message() << endl;
+		}
+	}
 
 
 	test_message_parsers(false);
@@ -300,6 +322,8 @@ int main(int argc, char **argv)
 	cout << endl;
 
 
+	std::system_category();
+
 	using namespace std::chrono_literals;
 
 
@@ -342,11 +366,97 @@ int main(int argc, char **argv)
 #endif
 
 
+#define CLIENT_AIO 1
+
+	class TestClientHandler : public ClientHandler
+	{
+	public:
+
+		void on_report(nng::msg &&msg)
+		{
+			cout << "CLI-SUB recv: ";
+			try
+			{
+				MsgView::Report bull(msg);
+				//print(bull);
+				cout << "[" << bull.startLine() << "] `" << bull.bodyString() << "`" << endl;
+				cout << endl;
+			}
+			catch (MsgException e)
+			{
+				cout << endl;
+				cout << "\t...Error parsing report: " << e.what() << endl;
+				cout << "\t...  At location: `" << e.excerpt << '`' << endl;
+				cout << endl;
+			}
+		}
+
+		void on_reply(QueryID id, nng::msg &&msg)
+		{
+			auto now = std::chrono::steady_clock::now();
+
+			try
+			{
+				MsgView::Reply reply(msg);
+
+				long long req_time = 0, rep_time = 0;
+				for (auto &h : reply.headers())
+				{
+					if (h.name == "Req-Time") req_time = std::stoll(std::string(h.value));
+					if (h.name == "Rep-Time") rep_time = std::stoll(std::string(h.value));
+				}
+
+				//print(reply);
+				cout << "CLI-REQ recv: ";
+				cout << "[" << reply.startLine() << "] `" << reply.bodyString() << "`" << endl;
+				//print(reply);
+
+				if (reply.status().code == StatusCode::NotFound)
+				{
+					//cout << "Halting client due to 404 error." << endl;
+					//clientKeepGoing = false;
+				}
+
+				if (req_time)
+				{
+					std::cout << "\tGET Request Roundtrip: " << std::chrono::duration_cast<std::chrono::microseconds>
+						(now.time_since_epoch() - decltype(now.time_since_epoch())(req_time)).count() << " us" << std::endl;
+				}
+				cout << endl;
+			}
+			catch (MsgException e)
+			{
+				cout << "CLI-REQ recv: ";
+				cout << endl;
+				cout << "\t...Error parsing report: " << e.what() << endl;
+				cout << "\t...  At location: `" << e.excerpt << '`' << endl;
+				cout << endl;
+			}
+		}
+
+		void async_recv(Subscribing sub, nng::msg &&msg) final
+		{
+			on_report(std::move(msg));
+		}
+
+		void async_recv(Requesting req, nng::msg &&msg) final
+		{
+			on_reply(req.id, std::move(msg));
+		}
+	};
+
+	edb::life_locked<TestClientHandler> clientHandler;
+
+
 
 	{
 		cout << "==== Creating client." << endl;
 
+#if CLIENT_AIO
+		Client client(clientHandler.get_weak());
+#else
 		Client_Box client;
+#endif
 
 
 		cout << "==== Connecting client to server." << endl;
@@ -368,26 +478,13 @@ int main(int argc, char **argv)
 
 		while (clientTimeTotal < 12'500)
 		{
+#if !CLIENT_AIO
 			{
 				nng::msg msg;
 
 				while (client.consume(msg))
 				{
-					cout << "CLI-SUB recv: ";
-					try
-					{
-						MsgView::Report bull(msg);
-						//print(bull);
-						cout << "[" << bull.startLine() << "] `" << bull.bodyString() << "`" << endl;
-						cout << endl;
-					}
-					catch (MsgException e)
-					{
-						cout << endl;
-						cout << "\t...Error parsing report: " << e.what() << endl;
-						cout << "\t...  At location: `" << e.excerpt << '`' << endl;
-						cout << endl;
-					}
+					clientHandler->on_report(std::move(msg));
 				}
 
 				// Get replies
@@ -402,30 +499,7 @@ int main(int argc, char **argv)
 					case std::future_status::ready:
 						try
 						{
-							cout << "CLI-REQ recv: ";
-							msg = i->get();
-
-							try
-							{
-								MsgView::Reply reply(msg);
-								//print(reply);
-								cout << "[" << reply.startLine() << "] `" << reply.bodyString() << "`" << endl;
-								cout << endl;
-								//print(reply);
-
-								if (reply.status().code == StatusCode::NotFound)
-								{
-									//cout << "Halting client due to 404 error." << endl;
-									//clientKeepGoing = false;
-								}
-							}
-							catch (MsgException e)
-							{
-								cout << endl;
-								cout << "\t...Error parsing report: " << e.what() << endl;
-								cout << "\t...  At location: `" << e.excerpt << '`' << endl;
-								cout << endl;
-							}
+							clientHandler->on_reply(0, i->get());
 						}
 						catch (nng::exception &e)
 						{
@@ -442,6 +516,7 @@ int main(int argc, char **argv)
 					}
 				}
 			}
+#endif
 
 			// Every so often...
 			std::this_thread::sleep_for(10ms);
@@ -456,6 +531,7 @@ int main(int argc, char **argv)
 			// Compose a request...
 			auto msg = WriteRequest(service_uri);
 			msg.writeHeader("Content-Type", "text/plain");
+			msg.writeHeader("Req-Time", std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
 
 			// And fire it as push or request.
 			switch (++clientSeq & 1)
@@ -463,17 +539,20 @@ int main(int argc, char **argv)
 			case 0:
 				// Push
 				msg.writeBody() << "I'm getting pushy!";
-				cout << "CLI-PUSH send > `" << service_uri << "`";
-				if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
-				cout << endl;
+				//if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
 				client.push(msg.release());
+				cout << "CLI-PUSH send > `" << service_uri << "`";
+				cout << endl;
 				break;
 
 			case 1:
-				// Make a request
-				cout << "CLI-REQ send > `" << service_uri << "`";
-				if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
-				if (pending_requests.size())
+				size_t pend_count = 0;
+#if CLIENT_AIO
+				client.request(msg.release());
+#else
+				pending_requests.emplace_back(client.request(msg.release()));
+				//if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
+				if (pending_requests.size()-1)
 				{
 					cout << endl << "\t" << pending_requests.size() << " pending ( ";
 					auto stats = client.requester()->msgStats();
@@ -482,7 +561,11 @@ int main(int argc, char **argv)
 					cout << " )";
 				}
 				cout << endl;
-				pending_requests.emplace_back(client.request(msg.release()));
+#endif	
+
+				// Make a request
+				cout << "CLI-REQ send > `" << service_uri << "`" << endl;
+
 				break;
 			}
 		}
