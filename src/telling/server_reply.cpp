@@ -75,6 +75,19 @@ void Server::ReqRep::async_recv(ServiceReplying, nng::msg &&msg)
 
 	//server()->log << Name() << ": ...sending reply..." << std::endl;
 
+#if 0
+	// DIAGNOSTIC
+	auto now = std::chrono::steady_clock::now();
+	MsgView::Reply reply(msg);
+
+	long long req_time = 0, rep_time = 0;
+	for (auto &h : reply.headers())
+	{
+		if (h.name == "Req-Time") req_time = std::stoll(std::string(h.value));
+		if (h.name == "Rep-Time") rep_time = std::stoll(std::string(h.value));
+	}
+#endif
+
 	// Forward reply to proper client
 	try
 	{
@@ -86,6 +99,16 @@ void Server::ReqRep::async_recv(ServiceReplying, nng::msg &&msg)
 			<< Name() << ": could not enqueue reply to client" << std::endl
 			<< "\t" << e.what() << std::endl;
 	}
+
+#if 0
+	// DIAGNOSTIC -- including above code
+	if (req_time)
+	{
+		std::cout << "*REP returning: " << std::chrono::duration_cast<std::chrono::microseconds>
+			(now.time_since_epoch() - decltype(now.time_since_epoch())(req_time)).count() << " us" << std::endl;
+	}
+	std::cout << std::endl;
+#endif
 }
 
 void Server::ReqRep::async_recv(ClientRequesting, nng::msg &&msg)

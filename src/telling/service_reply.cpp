@@ -126,7 +126,7 @@ void Reply::respondTo(QueryID queryID, nng::msg &&msg)
 				"respondTo: no outstanding request with this queryID");
 	}
 
-	// Unpicle the NNG context and turn it over to sender.
+	// Unpickle the NNG context and turn it over to sender.
 	nng_ctx _ctx = {queryID};
 
 	// Send or enqueue the reply.

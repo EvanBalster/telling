@@ -380,7 +380,7 @@ int main(int argc, char **argv)
 				MsgView::Report bull(msg);
 				//print(bull);
 				cout << "[" << bull.startLine() << "] `" << bull.bodyString() << "`" << endl;
-				cout << endl;
+				//cout << endl;
 			}
 			catch (MsgException e)
 			{
@@ -408,7 +408,14 @@ int main(int argc, char **argv)
 
 				//print(reply);
 				cout << "CLI-REQ recv: ";
-				cout << "[" << reply.startLine() << "] `" << reply.bodyString() << "`" << endl;
+
+				if (req_time)
+				{
+					std::cout << "(RTL:" << std::chrono::duration_cast<std::chrono::microseconds>
+						(now.time_since_epoch() - decltype(now.time_since_epoch())(req_time)).count() << "us) ";
+				}
+
+				cout << "[" << reply.startLine() << "]" << endl; // `" << reply.bodyString() << "`" << endl;
 				//print(reply);
 
 				if (reply.status().code == StatusCode::NotFound)
@@ -416,13 +423,6 @@ int main(int argc, char **argv)
 					//cout << "Halting client due to 404 error." << endl;
 					//clientKeepGoing = false;
 				}
-
-				if (req_time)
-				{
-					std::cout << "\tGET Request Roundtrip: " << std::chrono::duration_cast<std::chrono::microseconds>
-						(now.time_since_epoch() - decltype(now.time_since_epoch())(req_time)).count() << " us" << std::endl;
-				}
-				cout << endl;
 			}
 			catch (MsgException e)
 			{
@@ -522,7 +522,7 @@ int main(int argc, char **argv)
 			std::this_thread::sleep_for(10ms);
 			clientTimeTotal += 10;
 			clientClock += 10;
-			if (clientClock < 500) continue;
+			if (clientClock < 50) continue;
 			clientClock = 0;
 
 			// New thing happening

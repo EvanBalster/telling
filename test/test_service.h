@@ -97,8 +97,8 @@ namespace telling_test
 
 				if (req_time)
 				{
-					std::cout << "GET Latency to server: " << std::chrono::duration_cast<std::chrono::microseconds>
-						(now.time_since_epoch() - decltype(now.time_since_epoch())(req_time)).count() << " us" << std::endl;
+					//std::cout << "GET Latency to server: " << std::chrono::duration_cast<std::chrono::microseconds>
+					//	(now.time_since_epoch() - decltype(now.time_since_epoch())(req_time)).count() << " us" << std::endl;
 				}
 			}
 		};
