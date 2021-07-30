@@ -14,6 +14,15 @@ namespace telling_test
 {
 	using namespace telling;
 
+
+	inline long long MicroTime()
+	{
+		return std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now().time_since_epoch()
+			).count();
+	}
+
+
 	struct Service_PollingThread
 	{
 		std::string uri;
@@ -34,14 +43,14 @@ namespace telling_test
 			const std::string txt_reply;
 
 			size_t lifetime_ms;
-			std::chrono::steady_clock::time_point created;
+			long long created_microTime;
 
 		public:
 			Handler(Service_AIO &_service, std::string _reply, size_t _lifetime_ms) : 
 				Reactor(_service.uri),
 				service(&_service), txt_reply(_reply),
 				lifetime_ms(_lifetime_ms),
-				created(std::chrono::steady_clock::now()) {}
+				created_microTime(MicroTime()) {}
 			~Handler() {}
 
 			Methods allowed(UriView) const noexcept override
@@ -51,9 +60,11 @@ namespace telling_test
 
 			void async_get(Query query, Msg::Request &&request) final
 			{
-				auto now = std::chrono::steady_clock::now();
-				if ((now - created) > std::chrono::milliseconds(lifetime_ms))
+				long long recv_time = telling_test::MicroTime();
+
+				if ((recv_time - created_microTime) > 1000*lifetime_ms)
 				{
+					// Pretend I don't exist
 					throw status_exceptions::NotFound();
 				}
 
@@ -71,12 +82,12 @@ namespace telling_test
 					auto msg = WriteReply();
 					msg.writeHeader("Content-Type", "text/plain");
 					if (req_time) msg.writeHeader("Req-Time", std::to_string(req_time));
-					msg.writeHeader("Rep-Time", std::to_string(now.time_since_epoch().count()));
+					msg.writeHeader("Rep-Time", std::to_string(recv_time));
 					msg.writeBody()
 						<< service->uri
 						<< "\r\n"
 						<< txt_reply;
-					query.reply(msg.release());
+					service->respondTo(query.id, msg.release());
 				}
 				else
 				{
@@ -89,7 +100,7 @@ namespace telling_test
 					{
 						report.writeHeader(header.name, header.value);
 					}
-					report.writeHeader("Rep-Time", std::to_string(now.time_since_epoch().count()));
+					report.writeHeader("Rep-Time", std::to_string(recv_time));
 					report.writeHeader("X-Republished-By", service->uri);
 					report.writeBody() << request.body() << " (republished)";
 					service->publish(report.release());

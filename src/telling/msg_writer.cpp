@@ -36,13 +36,7 @@ static nng::msgbuf &operator<<(nng::msgbuf &o, std::string_view s)    {o.sputn(s
 static nng::msgbuf &operator<<(nng::msgbuf &o, char c)                {o.sputc(c); return o;}
 
 
-MsgWriter::MsgWriter(MsgProtocol _protocol) :
-	protocol(_protocol)
-{
-	crlf =
-		protocol.code >= MsgProtocolCode::Http_1_0 &&
-		protocol.code <= MsgProtocolCode::Http_1_1;
-}
+MsgWriter::MsgWriter(MsgProtocol _protocol) : protocol(_protocol) {}
 
 
 void MsgWriter::_startMsg()
@@ -50,7 +44,6 @@ void MsgWriter::_startMsg()
 	if (msg) throw MsgException(MsgError::ALREADY_WRITTEN, 0, 0);
 	*this = MsgWriter(protocol);
 	msg = nng::make_msg(0).release();
-	out.open(msg, std::ios::out);
 }
 
 void MsgWriter::_autoCloseHeaders()
@@ -61,7 +54,6 @@ void MsgWriter::_autoCloseHeaders()
 
 		// End headers
 		_newline();
-		out.pubsync();
 		//this->_p_body = msg.body().size();
 
 		// Parse everything  (TODO:  do this work along the way later)
@@ -71,8 +63,8 @@ void MsgWriter::_autoCloseHeaders()
 
 void MsgWriter::_newline()
 {
-	if (crlf) out.sputc('\r');
-	out.sputc('\n');
+	auto nl = protocol.preferred_newline();
+	msg.body().append(nng::view(nl.data(), nl.length()));
 }
 
 
@@ -85,6 +77,7 @@ void MsgWriter::startRequest(std::string_view uri, Method method)
 	if (ContainsWhitespace(uri))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
 
+	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
 	out << method.toString()
 		<< ' ' << uri
 		<< ' ' << protocol.toString();
@@ -98,6 +91,7 @@ void MsgWriter::startReply(Status status, std::string_view reason)
 	if (ContainsNewline(reason))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
 
+	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
 	out << protocol.toString()
 		<< ' ' << status.toString()
 		<< ' ' << reason;
@@ -113,6 +107,7 @@ void MsgWriter::startReport(std::string_view uri, Status status, std::string_vie
 	if (ContainsNewline(reason))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
 
+	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
 	out << uri
 		<< ' ' << protocol.toString()
 		<< ' ' << status.toString()
@@ -130,6 +125,7 @@ void MsgWriter::writeHeader(std::string_view name, std::string_view value)
 	if (ContainsNewline(value))
 		throw MsgException(MsgError::HEADER_MALFORMED, 0, 0);
 
+	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
 	out << name << ':' << value;
 	_newline();
 }
@@ -138,7 +134,6 @@ void MsgWriter::writeHeader(std::string_view name, std::string_view value)
 nng::msg MsgWriter::release()
 {
 	_autoCloseHeaders();
-	out.close();
 
 	if (head.lengthSize)
 	{
@@ -199,6 +194,7 @@ void MsgWriter::writeHeader_Length(size_t maxLength)
 
 	uint8_t digits = NumDigits(maxLength);
 
+	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
 	out << "Content-Length:";
 
 	head.lengthOffset = (uint16_t) msg.body().size();

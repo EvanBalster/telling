@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <thread>
 #include <chrono>
@@ -222,12 +223,12 @@ Content-Type:		application/json
 
 			if (should_print)
 			{
-				cout << test.label << ": OK -- ";
+				cout << std::setw(20) << test.label << ": OK -- ";
 				print(view_man);
 			}
 			else
 			{
-				cout << test.label << ": OK" << endl;
+				cout << std::setw(20) << test.label << ": OK" << endl;
 			}
 		}
 		catch (MsgException &e)
@@ -247,7 +248,31 @@ Content-Type:		application/json
 }
 
 
-template<typename x = char> constexpr x BUGGO()    {return x(0);}
+void test_system_errors()
+{
+	int test_errs[34];
+	for (int i = 0; i < 32; ++i) test_errs[i] = i;
+	test_errs[32] = NNG_EINTERNAL;
+	test_errs[33] = NNG_ESYSERR | 0xc0000005;
+
+	cout << "NNG error translation..." << endl;
+	for (int errcode : test_errs)
+	{
+		nng::exception ex(errcode, "test");
+		auto def = ex.code().default_error_condition();
+		cout
+			<< std::right
+			<< ex.code().category().name()
+			<< std::setw(3) << errcode << ':'
+			<< std::setw(8) << def.category().name() << ' '
+			<< std::setw(3) << def.value() << "; "
+			<< std::setw(35) << ex.what() << " -> "
+			<< std::left
+			<< std::setw(35) << def.message()
+			<< std::right
+			<< endl;
+	}
+}
 
 
 int main(int argc, char **argv)
@@ -256,24 +281,8 @@ int main(int argc, char **argv)
 	nng::tcp::register_transport();
 	nng::tls::register_transport();
 
-	static const auto c = BUGGO();
-	static const auto i = BUGGO<int>();
 
-
-	{
-		int test_errs[34];
-		for (int i = 0; i < 32; ++i) test_errs[i] = i;
-		test_errs[32] = NNG_EINTERNAL;
-		test_errs[33] = NNG_ESYSERR | 0xc0000005;
-
-		for (int errcode : test_errs)
-		{
-			nng::exception ex(errcode, "test");
-			auto def = ex.code().default_error_condition();
-			cout << ex.code().category().name() << "\t" << errcode << "\t" << ex.what() << endl
-				<< def.category().name() << "\t" << def.value() << "\t" << def.message() << endl;
-		}
-	}
+	//test_system_errors();
 
 
 	test_message_parsers(false);
@@ -371,19 +380,70 @@ int main(int argc, char **argv)
 	class TestClientHandler : public ClientHandler
 	{
 	public:
+		struct Counter
+		{
+			size_t n  = 0;
+			size_t Ex = 0;
+
+			void add(size_t x) noexcept    {++n; Ex += x;}
+
+			double mean() const noexcept    {return double(Ex)/double(n);}
+		};
+
+		Counter
+			us_req_rep  = {},
+			us_req      = {},
+			us_rep      = {},
+			us_push_pub = {},
+			us_push     = {},
+			us_pub      = {};
+
+		size_t total = 0;
+
+		volatile bool service_gone = false;
+
+
+	public:
 
 		void on_report(nng::msg &&msg)
 		{
-			cout << "CLI-SUB recv: ";
+			long long fin_time = telling_test::MicroTime();
+
 			try
 			{
 				MsgView::Report bull(msg);
+
+				long long req_time = 0, rep_time = 0;
+				for (auto &h : bull.headers())
+				{
+					if (h.name == "Req-Time") req_time = std::stoll(std::string(h.value));
+					if (h.name == "Rep-Time") rep_time = std::stoll(std::string(h.value));
+				}
+
+				if ((++total&7) == 0) std::cout.put('~');
+
 				//print(bull);
-				cout << "[" << bull.startLine() << "] `" << bull.bodyString() << "`" << endl;
+				//cout << "CLI-SUB recv: ";
+				//cout << "[" << bull.startLine() << "] `" << bull.bodyString() << "` ";
+				//cout << endl;
+
+
+				if (req_time)
+				{
+					size_t latency_us = fin_time - req_time;
+					us_push_pub.add(latency_us);
+
+					us_push.add(rep_time - req_time);
+					us_pub .add(fin_time - rep_time);
+
+					//std::cout << "(RTL:" << latency_us << "us) ";
+				}
+
 				//cout << endl;
 			}
 			catch (MsgException e)
 			{
+				cout << "CLI-SUB recv: ";
 				cout << endl;
 				cout << "\t...Error parsing report: " << e.what() << endl;
 				cout << "\t...  At location: `" << e.excerpt << '`' << endl;
@@ -393,11 +453,20 @@ int main(int argc, char **argv)
 
 		void on_reply(QueryID id, nng::msg &&msg)
 		{
-			auto now = std::chrono::steady_clock::now();
+			long long fin_time = telling_test::MicroTime();
 
 			try
 			{
 				MsgView::Reply reply(msg);
+
+				if (reply.status() == StatusCode::NotFound)
+				{
+					service_gone = true;
+					return;
+				}
+
+				if ((++total&7) == 0) std::cout.put('~');
+
 
 				long long req_time = 0, rep_time = 0;
 				for (auto &h : reply.headers())
@@ -407,15 +476,20 @@ int main(int argc, char **argv)
 				}
 
 				//print(reply);
-				cout << "CLI-REQ recv: ";
+				//cout << "CLI-REQ recv: ";
 
 				if (req_time)
 				{
-					std::cout << "(RTL:" << std::chrono::duration_cast<std::chrono::microseconds>
-						(now.time_since_epoch() - decltype(now.time_since_epoch())(req_time)).count() << "us) ";
+					size_t latency_us = fin_time - req_time;
+					us_req_rep.add(latency_us);
+
+					us_req.add(rep_time - req_time);
+					us_rep.add(fin_time - rep_time);
+
+					//std::cout << "(RTL:" << latency_us << "us) ";
 				}
 
-				cout << "[" << reply.startLine() << "]" << endl; // `" << reply.bodyString() << "`" << endl;
+				//cout << "[" << reply.startLine() << "]" << endl; // `" << reply.bodyString() << "`" << endl;
 				//print(reply);
 
 				if (reply.status().code == StatusCode::NotFound)
@@ -476,7 +550,7 @@ int main(int argc, char **argv)
 		client.subscribe("");
 
 
-		while (clientTimeTotal < 12'500)
+		while (clientTimeTotal < 10000)
 		{
 #if !CLIENT_AIO
 			{
@@ -522,16 +596,16 @@ int main(int argc, char **argv)
 			std::this_thread::sleep_for(10ms);
 			clientTimeTotal += 10;
 			clientClock += 10;
-			if (clientClock < 50) continue;
+			if (clientClock < 10) continue;
 			clientClock = 0;
 
 			// New thing happening
-			cout << endl;
+			//cout << endl;
 
 			// Compose a request...
 			auto msg = WriteRequest(service_uri);
 			msg.writeHeader("Content-Type", "text/plain");
-			msg.writeHeader("Req-Time", std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+			msg.writeHeader("Req-Time", std::to_string(telling_test::MicroTime()));
 
 			// And fire it as push or request.
 			switch (++clientSeq & 1)
@@ -541,8 +615,8 @@ int main(int argc, char **argv)
 				msg.writeBody() << "I'm getting pushy!";
 				//if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
 				client.push(msg.release());
-				cout << "CLI-PUSH send > `" << service_uri << "`";
-				cout << endl;
+				//cout << "CLI-PUSH send > `" << service_uri << "`";
+				//cout << endl;
 				break;
 
 			case 1:
@@ -564,11 +638,22 @@ int main(int argc, char **argv)
 #endif	
 
 				// Make a request
-				cout << "CLI-REQ send > `" << service_uri << "`" << endl;
+				//cout << "CLI-REQ send > `" << service_uri << "`" << endl;
 
 				break;
 			}
 		}
+
+		cout << endl;
+
+		cout << "Client LATENCY stats: " << endl
+			<< "    Cycles Completed: " << clientHandler->total << endl
+			<< "    One-Way    REQ    : " << size_t(clientHandler->us_req.mean()) << " us" << endl
+			<< "    One-Way        REP: " << size_t(clientHandler->us_rep.mean()) << " us" << endl
+			<< "    Roundtrip  REQ-REP: " << size_t(clientHandler->us_req_rep.mean()) << " us" << endl
+			<< "    One-Way   PUSH    : " << size_t(clientHandler->us_push.mean()) << " us" << endl
+			<< "    One-Way        PUB: " << size_t(clientHandler->us_pub.mean()) << " us" << endl
+			<< "    Roundtrip PUSH-PUB: " << size_t(clientHandler->us_push_pub.mean()) << " us" << endl;
 
 		cout << "==== Destroying client." << endl;
 	}

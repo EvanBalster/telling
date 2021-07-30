@@ -154,7 +154,6 @@
     <ClInclude Include="..\..\include\telling\http_client.h" />
     <ClInclude Include="..\..\include\telling\msg_method.h" />
     <ClInclude Include="..\..\include\telling\msg_status.h" />
-    <ClInclude Include="..\..\include\telling\msg_stream.h" />
     <ClInclude Include="..\..\include\telling\msg_uri.h" />
     <ClInclude Include="..\..\include\telling\msg_writer.h" />
     <ClInclude Include="..\..\include\telling\msg_headers.h" />

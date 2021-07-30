@@ -1,13 +1,14 @@
 #pragma once
 
 
+#include <nngpp/msg_iostream.h>
+
 #include "msg_headers.h"
 #include "msg_method.h"
 #include "msg_uri.h"
 #include "msg_protocol.h"
 #include "msg_status.h"
 #include "msg_layout.h"
-#include "msg_stream.h"
 
 
 namespace telling
@@ -78,13 +79,18 @@ namespace telling
 		std::string_view  bodyString() const noexcept    {return _string(_p_body, bodySize());}
 		size_t            bodySize()   const noexcept    {return msg.body().size() - _p_body;}
 		template<typename T>
-		const T*          bodyData()   const noexcept    {return msg.body().data<const char>() + _p_body;}
+		const T*          bodyData()   const noexcept    {return msg.body().data<const T>() + _p_body;}
 
-		// IOstreams with message body
-		nng::imsgstream   readBody()   const noexcept    {return nng::imsgstream(bodyBuf(std::ios::in | std::ios::binary));}
+		/*
+			Access the message body using IOstreams or stream buffers.
 
+				eg. msg.readBody() >> myValue;
+		*/
+		template<typename C=char, class Tr=std::char_traits<C>>
+		nng::basic_imsgstream<C,Tr> readBody()                        const noexcept    {return nng::basic_imsgstream<C,Tr>(bodyBuf<C,Tr>(std::ios::in | std::ios::binary));}
 
-		nng::msgbuf       bodyBuf (std::ios::openmode mode)   const noexcept    {nng::msgbuf buf; buf.open_range(msg, mode, _p_body); return buf;}
+		template<typename C=char, class Tr=std::char_traits<C>>
+		nng::basic_msgbuf<C,Tr>     bodyBuf (std::ios::openmode mode) const noexcept    {nng::basic_msgbuf<C,Tr> buf; buf.open_range(msg, mode, _p_body); return buf;}
 
 
 

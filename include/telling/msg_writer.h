@@ -3,6 +3,7 @@
 
 #include <sstream>
 #include <nngpp/msg.h>
+#include <nngpp/msg_iostream.h>
 
 #include "msg_util.h"
 #include "msg.h"
@@ -10,7 +11,6 @@
 #include "msg_status.h"
 #include "msg_method.h"
 #include "msg_protocol.h"
-#include "msg_stream.h"
 
 
 namespace telling
@@ -43,7 +43,8 @@ namespace telling
 		/*
 			STEP 3: append body data as desired.
 		*/
-		nng::omsgstream writeBody()    {_autoCloseHeaders(); return nng::omsgstream(out);}
+		template<typename C=char, class Tr=std::char_traits<C>>
+		nng::basic_omsgstream<C,Tr> writeBody() noexcept    {_autoCloseHeaders(); return nng::basic_omsgstream<C,Tr>(bodyBuf<C,Tr>(std::ios::out | std::ios::binary | std::ios::ate));}
 
 
 		/*
@@ -61,9 +62,7 @@ namespace telling
 
 
 	protected:
-		nng::msgbuf out;
 		MsgProtocol protocol;
-		bool        crlf = false;
 
 	private:
 		struct
