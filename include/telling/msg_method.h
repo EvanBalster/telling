@@ -203,7 +203,7 @@ namespace telling
 
 	namespace detail
 	{
-		constexpr unsigned CC2(char a, char b)    {return (unsigned char(a)<<8u) | unsigned char(b);}
+		constexpr unsigned CC2(char a, char b)    {return (unsigned(a)<<8u) | unsigned(b);}
 	}
 
 	inline Method Method::Parse(std::string_view v) noexcept

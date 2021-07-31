@@ -37,9 +37,9 @@ namespace telling
 			Err_()                        : message(std::string(Status(CODE).reasonPhrase())) {}
 			Err_(std::string _message)    : message(_message) {}
 
-			Status replyStatus() const noexcept override     {return CODE;}
+			Status replyStatus() const noexcept override         {return CODE;}
 
-			inline const char *what() const override         {return message.c_str();}
+			inline const char *what() const noexcept override    {return message.c_str();}
 		};
 
 		// 400 series
@@ -101,9 +101,9 @@ namespace telling
 		StatusException(Status _status)                          : status(_status), message(_status.reasonPhrase()) {}
 		StatusException(Status _status, std::string _message)    : status(_status), message(std::move(_message)) {}
 
-		inline const char *what() const override    {return message.c_str();}
+		inline const char *what() const noexcept override    {return message.c_str();}
 
-		Status replyStatus() const noexcept override     {return status;}
+		Status replyStatus() const noexcept override         {return status;}
 
 	};
 
@@ -139,7 +139,7 @@ namespace telling
 			error(_error), excerpt(s), more_info(info) {}
 		virtual ~MsgException() {}
 
-		inline const char *what() const override
+		inline const char *what() const noexcept override
 		{
 			switch (error)
 			{

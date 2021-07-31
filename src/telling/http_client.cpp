@@ -1,3 +1,4 @@
+#include <unordered_map>
 #include <nngpp/aio.h>
 
 #include <telling/http_client.h>

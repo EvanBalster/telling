@@ -277,9 +277,9 @@ void test_system_errors()
 
 int main(int argc, char **argv)
 {
-	nng::inproc::register_transport();
-	nng::tcp::register_transport();
-	nng::tls::register_transport();
+	//nng::inproc::register_transport();
+	//nng::tcp::register_transport();
+	//nng::tls::register_transport();
 
 
 	//test_system_errors();
@@ -420,7 +420,11 @@ int main(int argc, char **argv)
 					if (h.name == "Rep-Time") rep_time = std::stoll(std::string(h.value));
 				}
 
-				if ((++total&7) == 0) std::cout.put('~');
+				if ((++total&7) == 0)
+				{
+					std::cout.put('~');
+					std:cout.flush();
+				}
 
 				//print(bull);
 				//cout << "CLI-SUB recv: ";
