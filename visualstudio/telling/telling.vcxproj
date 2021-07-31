@@ -140,13 +140,16 @@
   <ItemGroup>
     <ClInclude Include="..\..\include\telling\async.h" />
     <ClInclude Include="..\..\include\telling\async_future.h" />
-    <ClInclude Include="..\..\include\telling\async_query.h" />
+    <ClInclude Include="..\..\include\telling\async_loop.h" />
     <ClInclude Include="..\..\include\telling\async_queue.h" />
     <ClInclude Include="..\..\include\telling\client.h" />
+    <ClInclude Include="..\..\include\telling\client_base.h" />
     <ClInclude Include="..\..\include\telling\client_push.h" />
     <ClInclude Include="..\..\include\telling\client_request.h" />
     <ClInclude Include="..\..\include\telling\client_subscribe.h" />
     <ClInclude Include="..\..\include\telling\deposit.h" />
+    <ClInclude Include="..\..\include\telling\msg.h" />
+    <ClInclude Include="..\..\include\telling\msg_layout.h" />
     <ClInclude Include="..\..\include\telling\msg_protocol.h" />
     <ClInclude Include="..\..\include\telling\http_client.h" />
     <ClInclude Include="..\..\include\telling\msg_method.h" />
@@ -159,6 +162,7 @@
     <ClInclude Include="..\..\include\telling\msg_view.h" />
     <ClInclude Include="..\..\include\telling\pattern.h" />
     <ClInclude Include="..\..\include\telling\service_base.h" />
+    <ClInclude Include="..\..\include\telling\service_reactor.h" />
     <ClInclude Include="..\..\include\telling\service_registration.h" />
     <ClInclude Include="..\..\include\telling\afar.h" />
     <ClInclude Include="..\..\include\telling\socket.h" />
@@ -168,12 +172,13 @@
     <ClInclude Include="..\..\include\telling\server.h" />
     <ClInclude Include="..\..\include\telling\service.h" />
     <ClInclude Include="..\..\include\telling\service_reply.h" />
-    <ClInclude Include="weak_anchor.h" />
+    <ClInclude Include="..\..\include\telling\uri_table.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\telling\client.cpp" />
     <ClCompile Include="..\..\src\telling\client_request.cpp" />
     <ClCompile Include="..\..\src\telling\client_subscribe.cpp" />
+    <ClCompile Include="..\..\src\telling\msg.cpp" />
     <ClCompile Include="..\..\src\telling\msg_util.cpp" />
     <ClCompile Include="..\..\src\telling\msg_view.cpp" />
     <ClCompile Include="..\..\src\telling\msg_writer.cpp" />
@@ -183,6 +188,7 @@
     <ClCompile Include="..\..\src\telling\server_reply.cpp" />
     <ClCompile Include="..\..\src\telling\server_services.cpp" />
     <ClCompile Include="..\..\src\telling\service.cpp" />
+    <ClCompile Include="..\..\src\telling\service_reactor.cpp" />
     <ClCompile Include="..\..\src\telling\service_registration.cpp" />
     <ClCompile Include="..\..\src\telling\service_reply.cpp" />
     <ClCompile Include="..\..\src\telling\socket.cpp" />

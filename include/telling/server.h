@@ -8,9 +8,9 @@
 #include <string>
 #include <string_view>
 #include <map>
-#include <robin_hood.h>
 #include <nngpp/nngpp.h>
 #include <tsl/htrie_map.h>
+#include <life_lock.h>
 
 #include "host_address.h"
 #include "io_queue.h"
@@ -19,18 +19,17 @@
 #include "socket.h"
 
 #include "service_pull.h"
-#include "client_push.h"
 #include "service_publish.h"
-#include "client_subscribe.h"
 #include "service_reply.h"
+#include "service.h"
+
+#include "client_push.h"
+#include "client_subscribe.h"
 #include "service_registration.h"
 
 
 namespace telling
 {
-	template<typename value_type>
-	using Dictionary = robin_hood::unordered_flat_map<std::string, value_type>;
-
 	template<typename value_type>
 	using PrefixMap = tsl::htrie_map<char, value_type>;
 
@@ -85,24 +84,6 @@ namespace telling
 		};
 
 
-		// Generic delegate for received messages.
-		template<typename Module, typename MsgViewType>
-		class DelegateRecv : public AsyncRecv
-		{
-		public:
-			DelegateRecv(Module *_module) : module(_module) {}
-			~DelegateRecv() {}
-			Directive asyncRecv_msg(nng::msg &&msg) override; // Below
-			Directive asyncRecv_error(nng::error error) override; // Below
-
-			void stop() {std::lock_guard<std::mutex> g(mtx); module = nullptr;}
-
-		public:
-			std::mutex mtx;
-			Module    *module;
-		};
-
-
 		class Route;
 		class Services;
 
@@ -111,11 +92,13 @@ namespace telling
 			Published messages are routed to all subscribers.
 				Services dial into sub_internal and publish their paths.
 		*/
-		class Publish
+		class PubSub : public AsyncRecv<Subscribing>
 		{
 		public:
-			Publish();
-			~Publish();
+			PubSub();
+			~PubSub();
+
+			std::weak_ptr<PubSub> get_weak()    {return async_lifetime.get_weak(this);}
 
 			Server *server();
 			static const char *Name()    {return "*PUB";}
@@ -124,40 +107,38 @@ namespace telling
 		protected:
 			friend class Services; // for now
 
-			using Delegate_Sub = DelegateRecv<Publish, MsgView::Bulletin>;
-			std::shared_ptr<Delegate_Sub> sub_delegate;
+			Subscribe   subscribe;
+			Publish_Box publish;
 
-			client::Subscribe_Async subscribe;
-			service::Publish_Box    publish;
+			void async_recv (Subscribing, nng::msg&&) override;
+			void async_error(Subscribing, AsyncError) override;
 
-			friend class Delegate_Sub;
-			AsyncOp::Directive received(const MsgView::Bulletin&, nng::msg&&);
-			AsyncOp::Directive receive_error(Delegate_Sub*, nng::error);
+			edb::life_lock_self async_lifetime;
 		}
 			publish;
 		
 		/*
 			Push-pull pattern.  Messages are routed by path.
 		*/
-		class Pull
+		class PushPull : public AsyncRecv<Pulling>
 		{
 		public:
-			Pull();
-			~Pull();
+			PushPull();
+			~PushPull();
+
+			std::weak_ptr<PushPull> get_weak()    {return async_lifetime.get_weak(this);}
 
 			Server *server();
 			static const char *Name()    {return "*PULL";}
 			Socket &hostSocket()         {return *pull.socket();}
 
 		protected:
-			using Delegate_Pull = DelegateRecv<Pull, MsgView::Request>;
-			std::shared_ptr<Delegate_Pull> pull_delegate;
+			Pull pull;
 
-			service::Pull_Async pull;
+			void async_recv (Pulling, nng::msg&&) override;
+			void async_error(Pulling, AsyncError) override;
 
-			friend class Delegate_Pull;
-			AsyncOp::Directive received(const MsgView::Request&, nng::msg&&);
-			AsyncOp::Directive receive_error(Delegate_Pull*, nng::error);
+			edb::life_lock_self async_lifetime;
 		}
 			pull;
 
@@ -165,51 +146,49 @@ namespace telling
 			Requests are routed to services by prefix.
 			Replies are routed to requesters with a backtrace.
 		*/
-		class Reply
+		class ReqRep;
+		class ClientRequesting : public TagSend<void> {};
+		class ServerResponding : public TagSend<void> {};
+		class ServiceReplying {};
+
+		class ReqRep :
+			public AsyncRecv<ClientRequesting>,
+			public AsyncRecv<ServiceReplying>
 		{
 		public:
-			using Delegate_Reply   = DelegateRecv<Reply, MsgView::Reply>;
-			using Delegate_Request = DelegateRecv<Reply, MsgView::Request>;
+			ReqRep();
+			~ReqRep();
 
-
-		public:
-			Reply();
-			~Reply();
+			std::weak_ptr<ReqRep> get_weak()    {return async_lifetime.get_weak(this);}
 
 			Server *server();
 			static const char *Name()    {return "*REP";}
 			Socket &hostSocket()         {return reply_ext;}
 
 
-			std::shared_ptr<Delegate_Reply> reply_handler()    {return delegate_reply;}
-
-
 		protected:
-			std::shared_ptr<Delegate_Reply>   delegate_reply;
-			std::shared_ptr<Delegate_Request> delegate_request;
-
 			Socket
 				reply_ext,   // <--> clients
 				request_dvc, // connects int and ext with a device
 				reply_int;   // <--> services
 
 			// I/O handling for replies
-			std::shared_ptr<AsyncSendQueue>       rep_sendQueue;
-			AsyncSend::Operator<nng::socket_view> rep_send;
-			AsyncRecv::Operator<nng::socket_view> rep_recv;
+			edb::life_locked<AsyncSendQueue<ServerResponding>> rep_sendQueue;
+			AsyncSendLoop   <ServerResponding>                 rep_send;
+			AsyncRecvLoop   <ClientRequesting>                 rep_recv;
 
-			friend class Delegate_Reply;
-			friend class Delegate_Request;
-			AsyncOp::Directive received(const MsgView::Reply&,   nng::msg&&);
-			AsyncOp::Directive received(const MsgView::Request&, nng::msg&&);
-
-			AsyncOp::Directive receive_error(Delegate_Request*, nng::error);
-			AsyncOp::Directive receive_error(Delegate_Reply  *, nng::error);
+			void async_recv (ClientRequesting, nng::msg&&) override;
+			void async_error(ClientRequesting, AsyncError) override;
+			void async_recv (ServiceReplying,  nng::msg&&) override;
+			void async_error(ServiceReplying,  AsyncError) override;
 
 
 		private:
 			std::thread thread_device;
-			static void run_device(Reply*);
+			static void run_device(ReqRep*);
+
+		protected:
+			edb::life_lock_self async_lifetime;
 		}
 			reply;
 
@@ -248,13 +227,13 @@ namespace telling
 				Route &route;
 			};
 
-			RequestRaw       req;
-			client::Push_Box push;
+			RequestRaw req;
+			Push_Box   push;
 
 			// I/O handling for requests
-			std::shared_ptr<AsyncSendQueue>       req_sendQueue;
-			AsyncSend::Operator<nng::socket_view> req_send;
-			AsyncRecv::Operator<nng::socket_view> req_recv;
+			edb::life_locked<AsyncSendQueue<ClientRequesting>> req_sendQueue;
+			AsyncSendLoop<ClientRequesting>                    req_send_to_service;
+			AsyncRecvLoop<ServiceReplying>                     req_recv_from_service;
 
 			std::mutex mtx;
 			bool halted = false;
@@ -264,7 +243,9 @@ namespace telling
 		/*
 			Directory of services.
 		*/
-		class Services
+		class Services :
+			public AsyncReply,
+			public Socket::PipeEventHandler
 		{
 		public:
 			/*
@@ -312,8 +293,6 @@ namespace telling
 
 
 		protected:
-			using Delegate_Sub = DelegateRecv<Services, MsgView::Bulletin>;
-
 			using PipeID = decltype(std::declval<nng_pipe>().id);
 
 			std::mutex         mtx;
@@ -339,17 +318,18 @@ namespace telling
 
 			void run_management_thread();
 
-			class RegisterResponder;
-			friend class RegisterResponder;
-			std::shared_ptr<RegisterResponder> register_responder;
-			service::Reply_Async               register_reply;
+			Reply register_reply;
 
 			std::unordered_map<PipeID, std::string> registrationMap;
 
-			AsyncOp::SendDirective registerRequest(QueryID, nng::msg &&);
-			void                   registerExpired(nng::pipe_view);
 
-			service::Publish_Box publish_events;
+			// Handlers
+			void pipeEvent(Socket *socket, nng::pipe_view pipe, nng::pipe_ev event) final;
+			void async_recv (Replying rep, nng::msg &&query)  final;
+			void async_sent (Replying rep) final;
+			void async_error(Replying rep, AsyncError status) final;
+
+			Publish_Box publish_events;
 			
 
 			Route *route(std::string_view path)
@@ -363,8 +343,13 @@ namespace telling
 			Services();
 			~Services();
 
+			std::weak_ptr<Services> get_weak()    {return async_lifetime.get_weak(this);}
+
 			Server *server();
 			static const char *Name()    {return "*services";}
+
+		protected:
+			edb::life_lock_self async_lifetime;
 		}
 			services;
 	};
@@ -375,52 +360,9 @@ namespace telling
 			ptrdiff_t(offsetof(telling::Server, member)))
 
 	inline Server *Server::Services::server() {return TELLING_SERVER_FROM_MODULE(this, services);}
-	inline Server *Server::Reply   ::server() {return TELLING_SERVER_FROM_MODULE(this, reply);}
-	inline Server *Server::Publish ::server() {return TELLING_SERVER_FROM_MODULE(this, publish);}
-	inline Server *Server::Pull    ::server() {return TELLING_SERVER_FROM_MODULE(this, pull);}
+	inline Server *Server::ReqRep  ::server() {return TELLING_SERVER_FROM_MODULE(this, reply);}
+	inline Server *Server::PubSub  ::server() {return TELLING_SERVER_FROM_MODULE(this, publish);}
+	inline Server *Server::PushPull::server() {return TELLING_SERVER_FROM_MODULE(this, pull);}
 
 	#undef TELLING_SERVER_FROM_MODULE
-
-
-	template<typename Module, typename MsgViewType>
-	AsyncOp::Directive Server::DelegateRecv<Module, MsgViewType>::asyncRecv_msg(nng::msg &&_msg)
-	{
-		// Lock out other receives and stop().
-		std::lock_guard<std::mutex> g(mtx);
-
-		if (!module)
-		{
-			return AsyncOp::TERMINATE;
-		}
-
-		// Retain message.
-		nng::msg msg = std::move(_msg);
-
-		auto server = module->server();
-		auto &log = server->log;
-
-		try
-		{
-			MsgViewType parsedMsg = msg;
-			auto result = module->received(parsedMsg, std::move(msg));
-			return result;
-		}
-		catch (MsgException e)
-		{
-			log << Module::Name() << ": message exception: " << e.what() << std::endl;
-		}
-
-		return AsyncOp::DECLINE;
-	}
-
-	template<typename Module, typename MsgViewType>
-	AsyncOp::Directive Server::DelegateRecv<Module, MsgViewType>::asyncRecv_error(nng::error error)
-	{
-		// Lock out other receives and stop().
-		std::lock_guard<std::mutex> g(mtx);
-
-		if (!module) return AsyncOp::TERMINATE;
-
-		return module->receive_error(this, error);
-	}
 }

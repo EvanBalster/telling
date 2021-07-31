@@ -6,8 +6,7 @@ using namespace telling;
 
 
 
-Server::Publish::Publish() :
-	subscribe(sub_delegate = std::make_shared<Delegate_Sub>(this))
+Server::PubSub::PubSub()
 {
 	auto server = this->server();
 	auto &log = server->log;
@@ -15,35 +14,39 @@ Server::Publish::Publish() :
 	// The subscriber is a relay, and accepts all topics.
 	subscribe.subscribe("");
 
-	// Relay service events to internal modules (dial-in mechanism)
+	// Relay service events to internal modules (dial-in mvechanism)
 	subscribe.listen(server->address_internal);
+
+	subscribe.initialize(get_weak());
 }
-Server::Publish::~Publish()
+Server::PubSub::~PubSub()
 {
-	sub_delegate->stop();
+	// Stop asynchronous work
+	async_lifetime.destroy();
 
 	subscribe.disconnectAll();
 	publish.disconnectAll();
 }
 
 
-AsyncOp::Directive Server::Publish::receive_error(Delegate_Sub  *, nng::error error)
+void Server::PubSub::async_error(Subscribing, AsyncError error)
 {
-	server()->log << Name() << ": ingestion error: " << nng::to_string(error) << std::endl;
-	return AsyncOp::AUTO;
+	server()->log << Name() << ": ingestion error: " << error.what() << std::endl;
 }
 
-AsyncOp::Directive Server::Publish::received(const MsgView::Bulletin &bulletin, nng::msg &&msg)
+void Server::PubSub::async_recv(Subscribing, nng::msg &&msg)
 {
 	// No mutex needed; this AIO is the only sender.
 
 	auto server = this->server();
 	auto &log = server->log;
 
-	log << Name() << ": publishing on URI `" << bulletin.uri() << "`" << std::endl;
+	MsgView::Report report;
+	try                    {report = msg;}
+	catch (MsgException e) {server->log << Name() << ": message exception: " << e.what() << std::endl; return;}
 
-	// Publish the message!
+	//log << Name() << ": publishing on URI `" << report.uri() << "`" << std::endl;
+
+	// PubSub the message!
 	publish.publish(std::move(msg));
-
-	return AsyncOp::CONTINUE;
 }

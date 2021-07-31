@@ -5,36 +5,42 @@ using namespace telling;
 
 
 
-Server::Pull::Pull() :
-	pull(pull_delegate = std::make_shared<Delegate_Pull>(this))
+Server::PushPull::PushPull()
 {
 	auto server = this->server();
 	auto &log = server->log;
+
+	pull.initialize(get_weak());
 }
-Server::Pull::~Pull()
+Server::PushPull::~PushPull()
 {
-	pull_delegate->stop();
+	// Stop asynchronous work
+	async_lifetime.destroy();
+
 	pull.disconnectAll();
 }
 
 
-AsyncOp::Directive Server::Pull::receive_error(Delegate_Pull  *, nng::error error)
+void Server::PushPull::async_error(Pulling, AsyncError error)
 {
-	server()->log << Name() << ": ingestion error: " << nng::to_string(error) << std::endl;
-	return AsyncOp::AUTO;
+	//server()->log << Name() << ": ingestion error: " << error.what() << std::endl;
 }
 
-AsyncOp::Directive Server::Pull::received(const MsgView::Request &request, nng::msg &&msg)
+void Server::PushPull::async_recv(Pulling, nng::msg &&msg)
 {
 	auto server = this->server();
 
+	MsgView::Request request;
+	try                    {request = msg;}
+	catch (MsgException e) {server->log << Name() << ": message exception: " << e.what() << std::endl; return;}
+
 	auto status = server->services.routePush(request.uri(), std::move(msg));
 
-	//server->log << Name() << ": pushing to URI `" << request.uri << "`" << std::endl;
+	//server->log << Name() << ": pushing to URI `" << request.uri() << "`" << std::endl;
 
 	if (status.isSuccessful())
 	{
-		return AsyncOp::CONTINUE;
+		// Neat
 	}
 	else
 	{
@@ -43,6 +49,5 @@ AsyncOp::Directive Server::Pull::received(const MsgView::Request &request, nng::
 			<< ") routing to `" << request.uri() << "`" << std::endl;
 
 		// There's no opportunity to reply, so the failed message is discarded.
-		return AsyncOp::DECLINE;
 	}
 }

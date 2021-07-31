@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <thread>
 #include <chrono>
@@ -19,6 +20,8 @@
 
 #include <telling/http_client.h>
 
+#include "test_service.h"
+
 
 using namespace telling;
 
@@ -26,12 +29,12 @@ using std::cout;
 using std::endl;
 
 
-template<class T> void printStartLine(T &t) {cout << "\tStartLine: `" << t.startLine()    << "`" << endl;}
-template<class T> void printMethod   (T &t) {cout << "\tMethod:    `" << t.methodString() << "` -- parsed as HTTP " << t.method() << endl;}
-template<class T> void printURI      (T &t) {cout << "\tURI:       `" << t.uri()          << "`" << endl;}
-template<class T> void printProtocol (T &t) {cout << "\tProtocol:  `" << t.protocol()     << "`" << endl;}
-template<class T> void printStatus   (T &t) {cout << "\tStatus:    `" << t.statusString() << "` -- parsed as HTTP " << t.status() << ' ' << t.status().reasonPhrase() << endl;}
-template<class T> void printReason   (T &t) {cout << "\tReason:    `" << t.reason()       << "`" << endl;}
+template<class T> void printStartLine(T &t) {cout << "\tStartLine: `" << t.startLine()      << "`" << endl;}
+template<class T> void printMethod   (T &t) {cout << "\tMethod:    `" << t.methodString()   << "` -- interpret " << t.method() << endl;}
+template<class T> void printURI      (T &t) {cout << "\tURI:       `" << t.uri()            << "`" << endl;}
+template<class T> void printProtocol (T &t) {cout << "\tProtocol:  `" << t.protocolString() << "` -- interpret " << t.protocol() << endl;}
+template<class T> void printStatus   (T &t) {cout << "\tStatus:    `" << t.statusString()   << "` -- interpret " << t.status() << ' ' << t.status().reasonPhrase() << endl;}
+template<class T> void printReason   (T &t) {cout << "\tReason:    `" << t.reason()         << "`" << endl;}
 void printHeaders(const MsgView &msg)
 {
 	cout << "\tHeaders... (" << msg.headers().length() << " bytes)" << endl;
@@ -71,9 +74,9 @@ void print(const MsgView::Reply &msg)
 	cout << endl;
 }
 
-void print(const MsgView::Bulletin &msg)
+void print(const MsgView::Report &msg)
 {
-	cout << "View Bulletin:" << endl;
+	cout << "View Report:" << endl;
 	printStartLine(msg);
 	printURI      (msg);
 	printProtocol (msg);
@@ -84,11 +87,43 @@ void print(const MsgView::Bulletin &msg)
 	cout << endl;
 }
 
-
-
-void test_message_parsers()
+void print(const MsgView &msg)
 {
-	auto string_to_msg = [](const std::string &s)
+	switch (msg.msgType())
+	{
+	case Msg::TYPE::REQUEST: print(static_cast<const MsgView::Request&>(msg)); break;
+	case Msg::TYPE::REPORT : print(static_cast<const MsgView::Report &>(msg)); break;
+	case Msg::TYPE::REPLY  : print(static_cast<const MsgView::Reply  &>(msg)); break;
+	default:
+		std::cout << "View unknown-type message:" << endl;
+		printStartLine(msg);
+		printMethod   (msg);
+		printURI      (msg);
+		printProtocol (msg);
+		printStatus   (msg);
+		printReason   (msg);
+		printHeaders  (msg);
+		printBody     (msg);
+		cout << endl;
+	}
+}
+
+std::ostream &operator<<(std::ostream &o, Msg::TYPE t)
+{
+	switch (t)
+	{
+	case Msg::TYPE::REQUEST: return o << "REQUEST";
+	case Msg::TYPE::REPORT: return o << "REPORT";
+	case Msg::TYPE::REPLY: return o << "REPLY";
+	default:              return o << "UNKNOWN";
+	}
+}
+
+void test_message_parsers(bool should_print)
+{
+	using namespace std::literals;
+
+	auto string_to_msg = [](std::string_view s)
 	{
 		nng::msg msg = nng::make_msg(0);
 		msg.body().append(nng::view(s.data(), s.length()));
@@ -96,82 +131,147 @@ void test_message_parsers()
 	};
 
 
+	struct MsgRaw
+	{
+		Msg::TYPE        type;
+		std::string_view label;
+		std::string_view text;
+	};
 
-	nng::msg mRequest;
-#if TEST_MSG_RAW
-	mRequest = string_to_msg(
-R"**(PATCH /voices/1 XTELL/0
+	MsgRaw raws[] =
+	{
+		{Msg::TYPE::REQUEST, "Full Request",
+		R"**(PATCH /voices/1 Tell/0
 Content-Type:		application/json 	 
 
-{"attributes": {"slide_mode": "hold"}})**");
-#else
+{"attributes": {"slide_mode": "hold"}})**"},
+		{Msg::TYPE::REPLY, "Full Reply",
+R"**(Tell/0 200 OK
+Content-Type:		application/json 	 
+
+{"attributes": {"midi_pitch": 64.729}})**"},
+		{Msg::TYPE::REPORT,  "Full Report",
+R"**(/voices/1 Tell/0 201 Created
+Content-Type:		application/json 	 
+
+{"attributes": {"midi_pitch": 64.729}})**"},
+		{Msg::TYPE::REQUEST,  "Tiny Request", "GET /a"            "\n\n"},
+		{Msg::TYPE::REQUEST,   "Min Request", "GET "              "\n\n"},
+		{Msg::TYPE::REPLY,   "Small Reply",          "Tell/0 404" "\n\n"},
+		{Msg::TYPE::REPLY,     "Min Reply",                " 404" "\n\n"},
+		{Msg::TYPE::REPORT,  "Small Report",      "/a Tell/0 201" "\n\n"},
+		{Msg::TYPE::REPORT,   "Tiny Report",      "/a Tell/0"     "\n\n"},
+		{Msg::TYPE::REPORT,    "Min Report",      "/a"            "\n\n"},
+	};
+
+	struct MsgTest
+	{
+		Msg::TYPE   type;
+		std::string label;
+		nng::msg    msg;
+
+		MsgTest(Msg::TYPE t, std::string_view l, nng::msg &&m) : type(t), label(l), msg(std::move(m)) {}
+	};
+
+	std::list<MsgTest> tests;
+
+	for (auto &raw : raws)
+	{
+		tests.emplace_back(raw.type, std::string(raw.label) + " (raw)"s, string_to_msg(raw.text));
+	}
+
 	{
 		auto msg = WriteRequest("/voices/1", MethodCode::PATCH);
 		msg.writeHeader("Content-Type", "application/json");
-		msg.writeData(R"*({"attributes": {"slide_mode": "hold"}})*");
-		mRequest = msg.release();
+		msg.writeBody() << R"*({"attributes": {"slide_mode": "hold"}})*";
+		tests.emplace_back(Msg::TYPE::REQUEST, "Gen. Request", msg.release());
 	}
-#endif
 
-	nng::msg mReply;
-#if TEST_MSG_RAW
-	mReply = string_to_msg(
-R"**(XTELL/0 200 OK
-Content-Type:		application/json 	 
-
-{"attributes": {"midi_pitch": 64.729}})**");
-#else
 	{
 		auto msg = WriteReply();
 		msg.writeHeader("Content-Type", "application/json");
-		msg.writeData(R"*({"attributes": {"midi_pitch": 64.729}})*");
-		mReply = msg.release();
+		msg.writeBody() << R"*({"attributes": {"midi_pitch": 64.729}})*";
+		tests.emplace_back(Msg::TYPE::REPLY, "Gen. Reply", msg.release());
 	}
-#endif
 
-	nng::msg mBulletin;
-#if TEST_MSG_RAW
-	mBulletin = string_to_msg(
-R"**(/voices/1  200 
-Content-Type:		application/json 	 
-
-{"attributes": {"midi_pitch": 64.729}})**");
-#else
 	{
-		auto msg = WriteBulletin("/voices/1");
+		auto msg = WriteReport("/voices/1");
 		msg.writeHeader("Content-Type", "application/json");
-		msg.writeData(R"*({"attributes": {"midi_pitch": 64.729}})*");
-		mBulletin = msg.release();
+		msg.writeBody() << R"*({"attributes": {"midi_pitch": 64.729}})*";
+		tests.emplace_back(Msg::TYPE::REPORT, "Gen. Report", msg.release());
 	}
-#endif
 
-	MsgView::Request  request;
-	MsgView::Reply    reply;
-	MsgView::Bulletin bulletin;
-	try
+	cout << "=== Begin message I/O tests..." << endl;
+	size_t issue_count = 0;
+	for (auto &test : tests)
 	{
-		request  = MsgView::Request(mRequest);
-		cout << "Request parsed..." << endl;
-		reply    = MsgView::Reply(mReply);
-		cout << "Reply parsed..." << endl;
-		bulletin = MsgView::Bulletin(mBulletin);
-		cout << "Bulletin parsed..." << endl;
+		// ...
+		try
+		{
+			MsgView view_man(test.msg, test.type);
+
+			MsgView view_auto(test.msg);
+
+			if (view_auto.msgType() != test.type)
+			{
+				cout << "*** Detected wrong message type" << std::endl;
+				cout << "\tin case: " << test.label << std::endl;
+				cout << "\texpected " << test.type << ", got " << view_auto.msgType() << std::endl;
+				cout << "***" << endl << endl;
+				++issue_count;
+			}
+
+			if (should_print)
+			{
+				cout << std::setw(20) << test.label << ": OK -- ";
+				print(view_man);
+			}
+			else
+			{
+				cout << std::setw(20) << test.label << ": OK" << endl;
+			}
+		}
+		catch (MsgException &e)
+		{
+			cout << "*** Parse exception" << std::endl;
+			cout << "\tin case: " << test.label << std::endl;
+			cout << "\tError: " << e.what() << std::endl;
+			cout << "\tLocation: `" << e.excerpt << '`' << endl;
+			cout << "***" << endl << endl;
+			++issue_count;
+		}
 	}
-	catch (MsgException e)
-	{
-		cout << "Error parsing message: " << e.what() << endl;
-		cout << "  At location: `" << std::string_view(e.position, e.length) << '`' << endl;
-	}
+	cout << "=== Completed message I/O tests with " << issue_count << " issues..." << endl;
 
 	cout << endl;
 	cout << endl;
+}
 
 
-	print(request);
+void test_system_errors()
+{
+	int test_errs[34];
+	for (int i = 0; i < 32; ++i) test_errs[i] = i;
+	test_errs[32] = NNG_EINTERNAL;
+	test_errs[33] = NNG_ESYSERR | 0xc0000005;
 
-	print(reply);
-
-	print(bulletin);
+	cout << "NNG error translation..." << endl;
+	for (int errcode : test_errs)
+	{
+		nng::exception ex(errcode, "test");
+		auto def = ex.code().default_error_condition();
+		cout
+			<< std::right
+			<< ex.code().category().name()
+			<< std::setw(3) << errcode << ':'
+			<< std::setw(8) << def.category().name() << ' '
+			<< std::setw(3) << def.value() << "; "
+			<< std::setw(35) << ex.what() << " -> "
+			<< std::left
+			<< std::setw(35) << def.message()
+			<< std::right
+			<< endl;
+	}
 }
 
 
@@ -180,6 +280,17 @@ int main(int argc, char **argv)
 	nng::inproc::register_transport();
 	nng::tcp::register_transport();
 	nng::tls::register_transport();
+
+
+	//test_system_errors();
+
+
+	test_message_parsers(false);
+
+
+	cout << endl;
+	cout << "Press ENTER to continue..." << endl;
+	std::cin.get();
 
 
 	cout << endl;
@@ -220,129 +331,9 @@ int main(int argc, char **argv)
 	cout << endl;
 
 
-	/*test_message_parsers();
-
-
-	cout << endl;
-	cout << "Press ENTER to continue..." << endl;
-	std::cin.get();*/
-
+	std::system_category();
 
 	using namespace std::chrono_literals;
-	
-
-	auto service_thread = [](std::string uri, std::string reply_text, size_t lifetime_ms = 7500) -> void
-	{
-		unsigned timer = 0;
-		unsigned timerTotal = 0;
-
-		size_t recvCount = 0;
-
-		std::this_thread::sleep_for(2500ms);
-
-		cout << "==== Creating service." << endl;
-		{
-		Service_Box service(uri);
-
-		while (timerTotal < lifetime_ms)
-		{
-			nng::msg msg;
-
-			while (service.pull(msg))
-			{
-				++recvCount;
-				cout << "SVC-PULL recv: ";
-				try
-				{
-					MsgView::Request req(msg);
-					//printStartLine(req);
-					//printHeaders(req);
-					cout << "[" << req.startLine() << "] `" << req.bodyString() << "` -- republishing with note" << endl;
-
-					// Re-publish the pulled message
-					auto bulletin = WriteBulletin(req.uri());
-					for (auto header : req.headers())
-					{
-						bulletin.writeHeader(header.name, header.value);
-					}
-					bulletin.writeHeader("X-Republished-By", uri);
-					bulletin.writeData(req.body());
-					service.publish(bulletin.release());
-				}
-				catch (MsgException e)
-				{
-					cout << endl;
-					cout << "\t...Error parsing message: " << e.what() << endl;
-					cout << "\t...  At location: `"
-						<< std::string_view(e.position, e.length) << '`' << endl;
-					cout << endl;
-				}
-			}
-
-			while (service.receive(msg))
-			{
-				++recvCount;
-				//cout << "SVC-REP recv: ";
-				try
-				{
-					MsgView::Request req(msg);
-					//printStartLine(req);
-					//printHeaders(req);
-					//cout << "[" << req.startLine() << "] `" << req.dataString() << "`" << endl;
-
-					auto reply = WriteReply();
-					reply.writeHeader("Content-Type", "text/plain");
-					reply.writeData(reply_text);
-					service.respond(reply.release());
-				}
-				catch (MsgException e)
-				{
-					cout << endl;
-					cout << "\t...Error parsing message: " << e.what() << endl;
-					cout << "\t...  At location: `"
-						<< std::string_view(e.position, e.length) << '`' << endl;
-					cout << endl;
-
-					service.respond(e.writeReply("Test Service"));
-				}
-			}
-
-			std::this_thread::sleep_for(10ms);
-			timer += 10;
-			timerTotal += 10;
-
-			if (recvCount == 0)
-			{
-				if (timer > 100)
-				{
-					timer = 0;
-					//service.broadcastServiceRegistration();
-				}
-			}
-			else
-			{
-				if (timer > 1000)
-				{
-					timer = 0;
-
-					cout << endl;
-					cout << "PUB send from service (heartbeat)" << endl;
-
-					auto bulletin = WriteBulletin(uri);
-					bulletin.writeHeader("Content-Type", "text/plain");
-					bulletin.writeData("This is a heartbeat message!");
-					service.publish(bulletin.release());
-				}
-			}
-		}
-
-		cout << "==== Destroying service." << endl;
-		}
-		cout << "==== Destroyed service..." << endl;
-		std::this_thread::sleep_for(2000ms);
-		cout << "==== Destroyed service, a little while ago." << endl;
-		cout << endl;
-	};
 
 
 
@@ -357,21 +348,189 @@ int main(int argc, char **argv)
 
 	std::string service_uri = "/voices";
 
-	
+
+
+	/*cout << "==== ...wait for service..." << endl;
+	std::this_thread::sleep_for(250ms);
+	cout << "==== ...wait for service..." << endl;
+	std::this_thread::sleep_for(250ms);*/
+
+
 	cout << "==== Starting service." << endl;
-	std::thread thread(service_thread, service_uri, "There are many voices to choose from.");
+
+#define SERVICE_AIO 1
+
+#if SERVICE_AIO
+	auto service_aio = new telling_test::Service_AIO(
+		service_uri,
+		"There are many voices to choose from."
+	);
+#else
+	telling_test::Service_PollingThread sPoll =
+	{
+		service_uri,
+		"There are many voices to choose from."
+	};
+	std::thread service_thread(&decltype(sPoll)::run, &sPoll);
+#endif
+
+
+#define CLIENT_AIO 1
+
+	class TestClientHandler : public ClientHandler
+	{
+	public:
+		struct Counter
+		{
+			size_t n  = 0;
+			size_t Ex = 0;
+
+			void add(size_t x) noexcept    {++n; Ex += x;}
+
+			double mean() const noexcept    {return double(Ex)/double(n);}
+		};
+
+		Counter
+			us_req_rep  = {},
+			us_req      = {},
+			us_rep      = {},
+			us_push_pub = {},
+			us_push     = {},
+			us_pub      = {};
+
+		size_t total = 0;
+
+		volatile bool service_gone = false;
+
+
+	public:
+
+		void on_report(nng::msg &&msg)
+		{
+			long long fin_time = telling_test::MicroTime();
+
+			try
+			{
+				MsgView::Report bull(msg);
+
+				long long req_time = 0, rep_time = 0;
+				for (auto &h : bull.headers())
+				{
+					if (h.name == "Req-Time") req_time = std::stoll(std::string(h.value));
+					if (h.name == "Rep-Time") rep_time = std::stoll(std::string(h.value));
+				}
+
+				if ((++total&7) == 0) std::cout.put('~');
+
+				//print(bull);
+				//cout << "CLI-SUB recv: ";
+				//cout << "[" << bull.startLine() << "] `" << bull.bodyString() << "` ";
+				//cout << endl;
+
+
+				if (req_time)
+				{
+					size_t latency_us = fin_time - req_time;
+					us_push_pub.add(latency_us);
+
+					us_push.add(rep_time - req_time);
+					us_pub .add(fin_time - rep_time);
+
+					//std::cout << "(RTL:" << latency_us << "us) ";
+				}
+
+				//cout << endl;
+			}
+			catch (MsgException e)
+			{
+				cout << "CLI-SUB recv: ";
+				cout << endl;
+				cout << "\t...Error parsing report: " << e.what() << endl;
+				cout << "\t...  At location: `" << e.excerpt << '`' << endl;
+				cout << endl;
+			}
+		}
+
+		void on_reply(QueryID id, nng::msg &&msg)
+		{
+			long long fin_time = telling_test::MicroTime();
+
+			try
+			{
+				MsgView::Reply reply(msg);
+
+				if (reply.status() == StatusCode::NotFound)
+				{
+					service_gone = true;
+					return;
+				}
+
+				if ((++total&7) == 0) std::cout.put('~');
+
+
+				long long req_time = 0, rep_time = 0;
+				for (auto &h : reply.headers())
+				{
+					if (h.name == "Req-Time") req_time = std::stoll(std::string(h.value));
+					if (h.name == "Rep-Time") rep_time = std::stoll(std::string(h.value));
+				}
+
+				//print(reply);
+				//cout << "CLI-REQ recv: ";
+
+				if (req_time)
+				{
+					size_t latency_us = fin_time - req_time;
+					us_req_rep.add(latency_us);
+
+					us_req.add(rep_time - req_time);
+					us_rep.add(fin_time - rep_time);
+
+					//std::cout << "(RTL:" << latency_us << "us) ";
+				}
+
+				//cout << "[" << reply.startLine() << "]" << endl; // `" << reply.bodyString() << "`" << endl;
+				//print(reply);
+
+				if (reply.status().code == StatusCode::NotFound)
+				{
+					//cout << "Halting client due to 404 error." << endl;
+					//clientKeepGoing = false;
+				}
+			}
+			catch (MsgException e)
+			{
+				cout << "CLI-REQ recv: ";
+				cout << endl;
+				cout << "\t...Error parsing report: " << e.what() << endl;
+				cout << "\t...  At location: `" << e.excerpt << '`' << endl;
+				cout << endl;
+			}
+		}
+
+		void async_recv(Subscribing sub, nng::msg &&msg) final
+		{
+			on_report(std::move(msg));
+		}
+
+		void async_recv(Requesting req, nng::msg &&msg) final
+		{
+			on_reply(req.id, std::move(msg));
+		}
+	};
+
+	edb::life_locked<TestClientHandler> clientHandler;
 
 
 
 	{
-		cout << "==== ...wait for service..." << endl;
-		std::this_thread::sleep_for(250ms);
-		cout << "==== ...wait for service..." << endl;
-		std::this_thread::sleep_for(250ms);
-
 		cout << "==== Creating client." << endl;
 
+#if CLIENT_AIO
+		Client client(clientHandler.get_weak());
+#else
 		Client_Box client;
+#endif
 
 
 		cout << "==== Connecting client to server." << endl;
@@ -391,32 +550,15 @@ int main(int argc, char **argv)
 		client.subscribe("");
 
 
-		bool clientKeepGoing = true;
-
-
-		while (clientKeepGoing && clientTimeTotal < 12'500)
+		while (clientTimeTotal < 10000)
 		{
+#if !CLIENT_AIO
 			{
 				nng::msg msg;
 
 				while (client.consume(msg))
 				{
-					cout << "CLI-SUB recv: ";
-					try
-					{
-						MsgView::Bulletin bull(msg);
-						//print(bull);
-						cout << "[" << bull.startLine() << "] `" << bull.bodyString() << "`" << endl;
-						cout << endl;
-					}
-					catch (MsgException e)
-					{
-						cout << endl;
-						cout << "\t...Error parsing bulletin: " << e.what() << endl;
-						cout << "\t...  At location: `"
-							<< std::string_view(e.position, e.length) << '`' << endl;
-						cout << endl;
-					}
+					clientHandler->on_report(std::move(msg));
 				}
 
 				// Get replies
@@ -431,30 +573,7 @@ int main(int argc, char **argv)
 					case std::future_status::ready:
 						try
 						{
-							cout << "CLI-REQ recv: ";
-							msg = i->get();
-
-							try
-							{
-								MsgView::Reply reply(msg);
-								//print(reply);
-								cout << "[" << reply.startLine() << "] `" << reply.bodyString() << "`" << endl;
-								cout << endl;
-
-								if (reply.status().code == StatusCode::NotFound)
-								{
-									//cout << "Halting client due to 404 error." << endl;
-									//clientKeepGoing = false;
-								}
-							}
-							catch (MsgException e)
-							{
-								cout << endl;
-								cout << "\t...Error parsing bulletin: " << e.what() << endl;
-								cout << "\t...  At location: `"
-									<< std::string_view(e.position, e.length) << '`' << endl;
-								cout << endl;
-							}
+							clientHandler->on_reply(0, i->get());
 						}
 						catch (nng::exception &e)
 						{
@@ -471,37 +590,43 @@ int main(int argc, char **argv)
 					}
 				}
 			}
+#endif
 
 			// Every so often...
 			std::this_thread::sleep_for(10ms);
 			clientTimeTotal += 10;
 			clientClock += 10;
-			if (clientClock < 500) continue;
+			if (clientClock < 10) continue;
 			clientClock = 0;
 
 			// New thing happening
-			cout << endl;
+			//cout << endl;
 
 			// Compose a request...
 			auto msg = WriteRequest(service_uri);
 			msg.writeHeader("Content-Type", "text/plain");
+			msg.writeHeader("Req-Time", std::to_string(telling_test::MicroTime()));
 
 			// And fire it as push or request.
 			switch (++clientSeq & 1)
 			{
 			case 0:
 				// Push
-				cout << "CLI-PUSH send > `" << service_uri << "`";
-				if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
-				cout << endl;
+				msg.writeBody() << "I'm getting pushy!";
+				//if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
 				client.push(msg.release());
+				//cout << "CLI-PUSH send > `" << service_uri << "`";
+				//cout << endl;
 				break;
 
 			case 1:
-				// Make a request
-				cout << "CLI-REQ send > `" << service_uri << "`";
-				if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
-				if (pending_requests.size())
+				size_t pend_count = 0;
+#if CLIENT_AIO
+				client.request(msg.release());
+#else
+				pending_requests.emplace_back(client.request(msg.release()));
+				//if (!client.requester()->isConnected()) cout << " -- NO CONNECTION";
+				if (pending_requests.size()-1)
 				{
 					cout << endl << "\t" << pending_requests.size() << " pending ( ";
 					auto stats = client.requester()->msgStats();
@@ -510,20 +635,42 @@ int main(int argc, char **argv)
 					cout << " )";
 				}
 				cout << endl;
-				pending_requests.emplace_back(client.request(msg.release()));
+#endif	
+
+				// Make a request
+				//cout << "CLI-REQ send > `" << service_uri << "`" << endl;
+
 				break;
 			}
 		}
+
+		cout << endl;
+
+		cout << "Client LATENCY stats: " << endl
+			<< "    Cycles Completed: " << clientHandler->total << endl
+			<< "    One-Way    REQ    : " << size_t(clientHandler->us_req.mean()) << " us" << endl
+			<< "    One-Way        REP: " << size_t(clientHandler->us_rep.mean()) << " us" << endl
+			<< "    Roundtrip  REQ-REP: " << size_t(clientHandler->us_req_rep.mean()) << " us" << endl
+			<< "    One-Way   PUSH    : " << size_t(clientHandler->us_push.mean()) << " us" << endl
+			<< "    One-Way        PUB: " << size_t(clientHandler->us_pub.mean()) << " us" << endl
+			<< "    Roundtrip PUSH-PUB: " << size_t(clientHandler->us_push_pub.mean()) << " us" << endl;
 
 		cout << "==== Destroying client." << endl;
 	}
 	cout << "==== Destroyed client." << endl;
 	cout << endl;
 	
-	cout << "==== Join service thread." << endl;
-	thread.join();
-	cout << "==== Joined service thread." << endl;
+#if SERVICE_AIO
+	cout << "==== Stop service (polling thread)." << endl;
+	delete service_aio;
+	cout << "==== Stopped service (polling thread)." << endl;
 	cout << endl;
+#else
+	cout << "==== Stop service (polling thread)." << endl;
+	service_thread.join();
+	cout << "==== Stopped service (polling thread)." << endl;
+	cout << endl;
+#endif
 
 	cout << "==== Destroying server." << endl;
 	server = nullptr;

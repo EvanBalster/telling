@@ -35,6 +35,9 @@ namespace telling
 
 		// Check method validity
 		explicit operator bool() const noexcept    {return code > MsgProtocolCode::None && code <= MsgProtocolCode::Http;}
+
+		// Properties...
+		std::string_view  preferred_newline() const noexcept    {return (code <= MsgProtocolCode::Telling) ? "\n" : "\r\n";}
 	};
 
 	/*

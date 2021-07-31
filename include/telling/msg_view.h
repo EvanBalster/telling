@@ -1,39 +1,37 @@
 #pragma once
 
 
+#include <nngpp/msg_iostream.h>
+
 #include "msg_headers.h"
 #include "msg_method.h"
 #include "msg_uri.h"
 #include "msg_protocol.h"
 #include "msg_status.h"
+#include "msg_layout.h"
 
 
 namespace telling
 {
 	/*
-		Parse a Telling message into its component parts.
+		MsgView parses a message according to Telling's HTTP-like format.
 	*/
-	class MsgView
+	class MsgView : protected MsgLayout
 	{
 	public:
 		class Request;
 		class Reply;
-		class Bulletin;
+		class Report;
 
 		class Exception;
 
-		enum class TYPE : int16_t
-		{
-			UNKNOWN  = -1,
-			REPLY    = 0, // (don't change these integer values)
-			BULLETIN = 1, // (they're selected for a parsing trick)
-			REQUEST  = 2,
-		};
+		using TYPE = MsgLayout::TYPE;
 
 
 	public:
-		MsgView() noexcept                                        {}
-		MsgView(nng::msg_view _msg, TYPE type = TYPE::UNKNOWN)    : msg(_msg), _type(type) {if (msg) {_parse_msg();}}
+		MsgView() noexcept                        {_parse_reset();}
+		MsgView(nng::msg_view _msg)               : msg(_msg) {if (msg) {_parse_msg(msg.body().get());}}
+		MsgView(nng::msg_view _msg, TYPE type)    : msg(_msg) {if (msg) {_parse_msg(msg.body().get(), type);}}
 
 		~MsgView() noexcept {}
 
@@ -41,11 +39,13 @@ namespace telling
 		/*
 			Test validity of message view (ie, parsing success)
 		*/
-		explicit operator bool() const noexcept    {return _type != TYPE::UNKNOWN;}
+		explicit operator bool() const noexcept    {return _type() != TYPE::UNKNOWN;}
 
-		bool is_request () const noexcept    {return _type == TYPE::REQUEST;}
-		bool is_reply   () const noexcept    {return _type == TYPE::REPLY;}
-		bool is_bulletin() const noexcept    {return _type == TYPE::BULLETIN;}
+		bool is_request() const noexcept    {return _type() == TYPE::REQUEST;}
+		bool is_reply  () const noexcept    {return _type() == TYPE::REPLY;}
+		bool is_report () const noexcept    {return _type() == TYPE::REPORT;}
+
+		TYPE msgType   () const noexcept    {return _type();}
 
 
 		/*
@@ -54,65 +54,65 @@ namespace telling
 				headers are an unordered non-unique list of key-value properties based on HTTP headers.
 				data is the content of the message and can be anything (headers may describe it).
 		*/
-
-		Method            method        () const noexcept    {return Method     ::Parse(methodString());}
-		UriView           uri           () const noexcept    {return _string(_uri);}
-		MsgProtocol       protocol      () const noexcept    {return MsgProtocol::Parse(protocolString());}
-		Status            status        () const noexcept    {return Status     ::Parse(statusString());}
-		std::string_view  reason        () const noexcept    {return _string(_reason);}
+		Method           method        () const noexcept    {return Method     ::Parse(  methodString());}
+		UriView          uri           () const noexcept    {return UriView(                uriString());}
+		MsgProtocol      protocol      () const noexcept    {return MsgProtocol::Parse(protocolString());}
+		Status           status        () const noexcept    {return Status     ::Parse(  statusString());}
+		std::string_view reason        () const noexcept    {return _string(_reason());}
 
 		// Raw elements of start-line.
-		std::string_view  startLine     () const noexcept    {return _string(0, _startLine_length);}
-		std::string_view  methodString  () const noexcept    {return _string(_method);}
-		std::string_view  protocolString() const noexcept    {return _string(_protocol);}
-		std::string_view  statusString  () const noexcept    {return _string(_status);}
+		std::string_view startLine     () const noexcept    {return _string(_startLine());}
+		std::string_view      uriString() const noexcept    {return _string(_uri());}
+		std::string_view   methodString() const noexcept    {return _string(_method());}
+		std::string_view protocolString() const noexcept    {return _string(_protocol());}
+		std::string_view   statusString() const noexcept    {return _string(_status());}
 
 		/*
 			Access the message headers, which can be iterated over.
 		*/
-		MsgHeaders        headers()    const noexcept    {return MsgHeaders(_string(_headers));}
+		MsgHeaders        headers()    const noexcept    {return MsgHeaders(_string_rem_nl(_headers()));}
 
 		/*
 			Access the message body.
 		*/
-		nng::view         body()       const noexcept    {return _view  (_body_offset, msg.body().size() - _body_offset);}
-		std::string_view  bodyString() const noexcept    {return _string(_body_offset, msg.body().size() - _body_offset);}
-		size_t            bodySize()   const noexcept    {return msg.body().size();}
+		nng::view         body()       const noexcept    {return _view  (_p_body, bodySize());}
+		std::string_view  bodyString() const noexcept    {return _string(_p_body, bodySize());}
+		size_t            bodySize()   const noexcept    {return msg.body().size() - _p_body;}
 		template<typename T>
-		const T*          bodyData()   const noexcept    {return msg.body().data<const T>();}
+		const T*          bodyData()   const noexcept    {return msg.body().data<const T>() + _p_body;}
 
+		/*
+			Access the message body using IOstreams or stream buffers.
 
-		// Duck-typing tests for message formats
-		//bool is_reply   () const noexcept    {return msg && msg.body().data<char>() == statusString.data();}
-		//bool is_request () const noexcept    {return msg && msg.body().data<char>() == methodString.data();}
-		//bool is_bulletin() const noexcept    {return msg && msg.body().data<char>() == uri         .data();}
+				eg. msg.readBody() >> myValue;
+		*/
+		template<typename C=char, class Tr=std::char_traits<C>>
+		nng::basic_imsgstream<C,Tr> readBody()                        const noexcept    {return nng::basic_imsgstream<C,Tr>(bodyBuf<C,Tr>(std::ios::in | std::ios::binary));}
+
+		template<typename C=char, class Tr=std::char_traits<C>>
+		nng::basic_msgbuf<C,Tr>     bodyBuf (std::ios::openmode mode) const noexcept    {nng::basic_msgbuf<C,Tr> buf; buf.open_range(msg, mode, _p_body); return buf;}
+
 
 
 	public:
 		nng::msg_view    msg;
 
 
-	protected:
-		struct HeadRange {uint16_t start, length;};
-
-		TYPE             _type = TYPE::UNKNOWN;
-
-		// Basic structure
-		uint16_t         _startLine_length = 0;
-		uint16_t         _body_offset = 0;
-		HeadRange        _headers = {};
-
-		// Start-line properties...
-		HeadRange        _method = {}, _uri = {}, _protocol = {}, _status = {}, _reason = {};
-
-
 	private:
-		void _parse_msg();
+		HeadRange _body() const noexcept    {return {_p_body, (_p_body ? msg.body().size() : 0) - _p_body};}
 
-		nng::view        _view  (size_t start, size_t length) const noexcept    {return nng::       view(msg.body().data<char>()+start, length);}
-		nng::view        _view  (HeadRange b)                 const noexcept    {return nng::       view(msg.body().data<char>()+b.start, b.length);}
-		std::string_view _string(size_t start, size_t length) const noexcept    {return std::string_view(msg.body().data<char>()+start, length);}
-		std::string_view _string(HeadRange b)                 const noexcept    {return std::string_view(msg.body().data<char>()+b.start, b.length);}
+		const char      *_raw   ()                            const noexcept    {return msg.body().data<char>();}
+		nng::view        _view  (size_t start, size_t length) const noexcept    {return nng::       view(_raw()+start, length);}
+		nng::view        _view  (HeadRange b)                 const noexcept    {return nng::       view(_raw()+b.start, b.length);}
+		std::string_view _string(size_t start, size_t length) const noexcept    {return std::string_view(_raw()+start, length);}
+		std::string_view _string(HeadRange b)                 const noexcept    {return std::string_view(_raw()+b.start, b.length);}
+		std::string_view _string_rem_nl(HeadRange b) const noexcept
+		{
+			std::string_view s(_string(b));
+			if (            s.back() == '\n') s.remove_suffix(1);
+			if (s.size() && s.back() == '\r') s.remove_suffix(1);
+			return s;
+		}
 	};
 
 
@@ -120,27 +120,29 @@ namespace telling
 	{
 	public:
 		~Request() noexcept {}
-		Request() noexcept {}
-		Request(nng::msg_view msg) : MsgView(msg, TYPE::REQUEST) {}
+		Request()  noexcept {}
+		Request(nng::msg_view msg)     : MsgView(msg, TYPE::REQUEST) {}
 	};
+	
 	class MsgView::Reply : public MsgView
 	{
 	public:
 		~Reply() noexcept {}
-		Reply() noexcept {}
-		Reply(nng::msg_view msg) : MsgView(msg, TYPE::REPLY) {}
+		Reply()  noexcept {}
+		Reply(nng::msg_view msg)       : MsgView(msg, TYPE::REPLY) {}
 	};
-	class MsgView::Bulletin : public MsgView
+
+	class MsgView::Report : public MsgView
 	{
 	public:
-		~Bulletin() noexcept {}
-		Bulletin() noexcept {}
-		Bulletin(nng::msg_view msg) : MsgView(msg, TYPE::BULLETIN) {}
+		~Report() noexcept {}
+		Report()  noexcept {}
+		Report(nng::msg_view msg)    : MsgView(msg, TYPE::REPORT) {}
 	};
 
 
-	inline MsgView View        (nng::msg_view msg)    {return MsgView          (msg);}
-	inline MsgView ViewRequest (nng::msg_view msg)    {return MsgView::Request (msg);}
-	inline MsgView ViewReply   (nng::msg_view msg)    {return MsgView::Reply   (msg);}
-	inline MsgView ViewBulletin(nng::msg_view msg)    {return MsgView::Bulletin(msg);}
+	inline MsgView View       (nng::msg_view msg)    {return MsgView         (msg);}
+	inline MsgView ViewRequest(nng::msg_view msg)    {return MsgView::Request(msg);}
+	inline MsgView ViewReply  (nng::msg_view msg)    {return MsgView::Reply  (msg);}
+	inline MsgView ViewReport (nng::msg_view msg)    {return MsgView::Report (msg);}
 }

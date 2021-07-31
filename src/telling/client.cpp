@@ -13,38 +13,29 @@ Client_Box::~Client_Box()
 }
 
 
-AsyncOp::SendDirective Client_Async::Handler::asyncSend_msg(nng::msg &&msg)
+void ClientHandler::async_prep(Pushing push, nng::msg &msg)
 {
-	if (pushQueue.produce(std::move(msg))) return CONTINUE;
-	return SendDirective(std::move(msg));
+	if (!pushQueue.produce(std::move(msg)))
+		push.send(std::move(msg));
 }
-AsyncOp::SendDirective Client_Async::Handler::asyncSend_sent()
+void ClientHandler::async_sent(Pushing push)
 {
-	auto direct = this->push_sent();
-
-	if (!direct.sendMsg) switch (direct.directive)
-	{
-	case DECLINE: case TERMINATE:
-		// Interrupt sending
-		break;
-	case AUTO: case CONTINUE: default:
-		nng::msg next;
-		if (pushQueue.consume(next)) direct = std::move(next);
-		else                         direct = DECLINE;
-		break;
-	}
-	return direct;
+	nng::msg next;
+	if (pushQueue.consume(next)) push.send(std::move(next));
 }
 
 
-Client_Async::Client_Async(std::weak_ptr<Handler> _handler) :
-	//handler(std::move(_handler)),
-	_requester (_handler),
-	_subscriber(_handler),
-	_pusher    (_handler)
+Client::Client()
 {
 }
-Client_Async::~Client_Async()
+Client::~Client()
 {
 	close();
+}
+
+void Client::initialize(std::weak_ptr<ClientHandler_Base> _handler)
+{
+	_requester .initialize(_handler);
+	_subscriber.initialize(_handler);
+	_pusher    .initialize(_handler);
 }

@@ -9,9 +9,9 @@ using namespace telling;
 */
 
 
-static size_t NumDigits(size_t value)
+static uint8_t NumDigits(size_t value)
 {
-	size_t digits = 0;
+	uint8_t digits = 0;
 	do {++digits; value /= 10;} while (value);
 	return digits;
 }
@@ -29,45 +29,42 @@ static bool ContainsWhitespace(const std::string_view &s)
 }
 
 
-MsgWriter::MsgWriter(MsgProtocol _protocol) :
-	protocol(_protocol)
-{
-	crlf =
-		protocol.code >= MsgProtocolCode::Http_1_0 &&
-		protocol.code <= MsgProtocolCode::Http_1_1;
-}
+/*
+	Enable cout-style operations on msgbuf in this file only.
+*/
+static nng::msgbuf &operator<<(nng::msgbuf &o, std::string_view s)    {o.sputn(s.data(), s.length()); return o;}
+static nng::msgbuf &operator<<(nng::msgbuf &o, char c)                {o.sputc(c); return o;}
+
+
+MsgWriter::MsgWriter(MsgProtocol _protocol) : protocol(_protocol) {}
 
 
 void MsgWriter::_startMsg()
 {
-	if (msg) throw MsgException(MsgError::OUT_OF_ORDER, 0, 0);
+	if (msg) throw MsgException(MsgError::ALREADY_WRITTEN, 0, 0);
 	*this = MsgWriter(protocol);
-	msg = nng::make_msg(0);
+	msg = nng::make_msg(0).release();
 }
 
 void MsgWriter::_autoCloseHeaders()
 {
-	if (!msg) throw MsgException(MsgError::OUT_OF_ORDER, 0, 0);
-	if (!dataOffset)
+	if (!this->_p_body)
 	{
+		if (!msg) throw MsgException(MsgError::ALREADY_WRITTEN, 0, 0);
+
 		// End headers
 		_newline();
-		dataOffset = msg.body().size();
+		//this->_p_body = msg.body().size();
+
+		// Parse everything  (TODO:  do this work along the way later)
+		_parse_msg(msg.body().get());
 	}
 }
 
 void MsgWriter::_newline()
 {
-	msg.body().append(crlf ? nng::view("\r\n", 2) : nng::view("\n", 1));
-}
-
-void MsgWriter::_append(char c)
-{
-	msg.body().append(nng::view(&c, 1));
-}
-void MsgWriter::_append(const std::string_view &s)
-{
-	msg.body().append(nng::view(s.data(), s.length()));
+	auto nl = protocol.preferred_newline();
+	msg.body().append(nng::view(nl.data(), nl.length()));
 }
 
 
@@ -77,16 +74,13 @@ void MsgWriter::startRequest(std::string_view uri, Method method)
 
 	if (!method)
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
-
-	_append(method.toString());
-	_append(' ');
-
 	if (ContainsWhitespace(uri))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
-	_append(uri);
-	_append(' ');
-	_append(protocol.toString());
 
+	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
+	out << method.toString()
+		<< ' ' << uri
+		<< ' ' << protocol.toString();
 	_newline();
 }
 
@@ -94,79 +88,61 @@ void MsgWriter::startReply(Status status, std::string_view reason)
 {
 	_startMsg();
 
-	_append(protocol.toString());
-	_append(' ');
-	_append(status.toString());
-	_append(' ');
-
 	if (ContainsNewline(reason))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
-	_append(reason);
 
+	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
+	out << protocol.toString()
+		<< ' ' << status.toString()
+		<< ' ' << reason;
 	_newline();
 }
 
-void MsgWriter::startBulletin(std::string_view uri, Status status, std::string_view reason)
+void MsgWriter::startReport(std::string_view uri, Status status, std::string_view reason)
 {
 	_startMsg();
 
 	if (ContainsWhitespace(uri))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
-	_append(uri);
-	_append(' ');
-	_append(protocol.toString());
-	_append(' ');
-	_append(status.toString());
-	_append(' ');
-
 	if (ContainsNewline(reason))
 		throw MsgException(MsgError::START_LINE_MALFORMED, 0, 0);
-	_append(reason);
 
+	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
+	out << uri
+		<< ' ' << protocol.toString()
+		<< ' ' << status.toString()
+		<< ' ' << reason;
 	_newline();
 }
 
 void MsgWriter::writeHeader(std::string_view name, std::string_view value)
 {
-	if (!msg || dataOffset)
-		throw MsgException(MsgError::OUT_OF_ORDER, 0, 0);
+	if (!msg || this->_p_body)
+		throw MsgException(MsgError::ALREADY_WRITTEN, 0, 0);
 
 	for (auto c : name) if (c == '\r' || c == '\n' || c == ':')
 		throw MsgException(MsgError::HEADER_MALFORMED, 0, 0);
 	if (ContainsNewline(value))
 		throw MsgException(MsgError::HEADER_MALFORMED, 0, 0);
 
-	_append(name);
-	_append(':');
-	_append(value);
+	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
+	out << name << ':' << value;
 	_newline();
 }
 
 
-void MsgWriter::writeData(std::string_view text)
-{
-	_autoCloseHeaders();
-	_append(text);
-}
-
-void MsgWriter::writeData(nng::view data)
-{
-	writeData(std::string_view((const char*) data.data(), data.size()));
-}
-
-
-nng::msg &&MsgWriter::release()
+nng::msg MsgWriter::release()
 {
 	_autoCloseHeaders();
 
-	if (lengthSize)
+	if (head.lengthSize)
 	{
-		size_t bodySize = msg.body().size() - dataOffset;
+		size_t bodySize = msg.body().size() - this->_p_body;
 		auto digits = NumDigits(bodySize);
-		if (digits > lengthSize)
+		if (digits > head.lengthSize)
 			throw nng::exception(nng::error::nospc, "Content-Length header completion");
 
-		char *pos = msg.body().get().data<char>() + lengthOffset + digits;
+		char *pos = msg.body().get().data<char>() + head.lengthOffset + digits;
 		do
 		{
 			*--pos = '0' + (bodySize%10);
@@ -174,9 +150,9 @@ nng::msg &&MsgWriter::release()
 		}
 		while (bodySize);
 	}
-	
 
-	return std::move(msg);
+	head = {};
+	return std::move(Msg::release());
 }
 
 
@@ -188,7 +164,7 @@ void MsgWriter::setNNGHeader(nng::view data)
 
 
 
-void MsgWriter::writeHeader_Allowed(Methods methods)
+void MsgWriter::writeHeader_Allow(Methods methods)
 {
 	std::string allowed;
 
@@ -208,21 +184,23 @@ void MsgWriter::writeHeader_Allowed(Methods methods)
 		}
 	}
 
-	writeHeader("Allowed", allowed);
+	writeHeader("Allow", allowed);
 }
 
 void MsgWriter::writeHeader_Length(size_t maxLength)
 {
-	if (lengthSize)
+	if (head.lengthSize)
 		throw nng::exception(nng::error::nospc, "Content-Length header allocation");
 
-	size_t digits = NumDigits(maxLength);
+	uint8_t digits = NumDigits(maxLength);
 
-	_append("Content-Length:");
+	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
+	out << "Content-Length:";
 
-	lengthOffset = msg.body().size();
-	lengthSize   = digits;
+	head.lengthOffset = (uint16_t) msg.body().size();
+	head.lengthSize   = digits;
 
-	_append(std::string_view("                    ", digits));
+	// Unlikely we'll need to deal with messages >= 100 exabytes
+	out << std::string_view("                    ", digits);
 	_newline();
 }

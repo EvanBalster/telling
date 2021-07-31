@@ -1,110 +1,121 @@
 #pragma once
 
 
+#include <utility>
 #include <unordered_set>
 #include <mutex>
+#include <life_lock.h>
 #include "io_queue.h"
 #include "socket.h"
-#include "async_query.h"
+#include "async_loop.h"
 
 
 namespace telling
 {
-	namespace service
+	// Type hierarchy
+	using Reply_Pattern = Communicator::Pattern_Base<Role::SERVICE, Pattern::REQ_REP>;
+	using Reply_Base    = Reply_Pattern;
+	class Reply;     // inherits Reply_Base
+	class Reply_Box; // inherits Reply
+
+	// Tag delivered to callbacks
+	using Replying = TagRespond<Reply>;
+
+	// Base class for asynchronous I/O
+	using AsyncRep   = AsyncRespond<Replying>;
+	using AsyncReply = AsyncRep;
+
+
+
+	/*
+		Reply communicator that calls an AsyncReply handler.
+	*/
+	class Reply : public Reply_Base
 	{
-		// Base type for Reply services.
-		using Rep_Base = Communicator::Pattern_Base<Role::SERVICE, Pattern::REQ_REP>;
+	public:
+		/*
+			Construct with asynchronous I/O handler and optional socket-sharing.
+		*/
+		Reply()                                                     : Reply_Base() {}
+		Reply(std::weak_ptr<AsyncRep> p)                            : Reply() {initialize(p);}
+		Reply(const Reply_Pattern &shared)                          : Reply_Base(shared) {}
+		Reply(const Reply_Pattern &s, std::weak_ptr<AsyncRep> p)    : Reply(s) {initialize(p);}
+		~Reply();
 
-
-		// Shorthand & longhand
-		using                  Reply_Base  = Rep_Base;
-		class Rep_Async; using Reply_Async = Rep_Async;
-		class Rep_Box;   using Reply_Box   = Rep_Box;
+		/*
+			Provide a handler for handling requests after construction.
+				Throws nng::exception if a handler has already been installed.
+		*/
+		void initialize(std::weak_ptr<AsyncRep>);
 
 
 		/*
-			Reply communicator that calls an AsyncRespond delegate.
+			Send a response to a specific outstanding query.
 		*/
-		class Rep_Async :
-			public Rep_Base
+		void respondTo(QueryID, nng::msg &&msg);
+
+
+	protected:
+		std::weak_ptr<AsyncRep> _handler;
+
+		struct OutboxItem
 		{
-		public:
-			Rep_Async(std::weak_ptr<AsyncRespond> p = {})                                 : Rep_Base()               {initialize(p);}
-			Rep_Async(const Rep_Base &shareSocket, std::weak_ptr<AsyncRespond> p = {})    : Rep_Base(shareSocket)    {initialize(p);}
-			~Rep_Async();
+			nng::ctx ctx;
+			nng::msg msg;
+		};
+		using Unresponded = std::unordered_set<QueryID>;
 
+		std::mutex  unresponded_mtx;
+		Unresponded unresponded;
 
-			/*
-				Provide a delegate for handling requests after construction.
-					Throws nng::exception if a delegate has already been installed.
-			*/
-			void initialize(std::weak_ptr<AsyncRespond>);
-
-
-			/*
-				Send a response to a specific outstanding query.
-			*/
-			void respondTo(QueryID, nng::msg &&msg);
-
-
-		protected:
-			std::weak_ptr<AsyncRespond> _delegate;
-
-			struct OutboxItem
-			{
-				nng::ctx ctx;
-				nng::msg msg;
-			};
-			using Unresponded = std::unordered_set<QueryID>;
-
-			std::mutex  unresponded_mtx;
-			Unresponded unresponded;
-
-			nng::aio                  aio_send, aio_recv;
-			SendQueueMtx_<OutboxItem> outbox;
+		nng::aio                  aio_send, aio_recv;
+		SendQueueMtx_<OutboxItem> outbox;
 			
-			nng::ctx ctx_aio_recv, ctx_aio_send;
+		nng::ctx ctx_aio_recv, ctx_aio_send;
 
-			void _init();
-			static void _aioReceived(void*);
-			static void _aioSent    (void*);
-		};
+		void _init();
+		static void _aioReceived(void*);
+		static void _aioSent    (void*);
+	};
 
+
+
+	/*
+		Non-blocking service socket for replying to requests.
+	*/
+	class Reply_Box : public Reply
+	{
+	public:
+		explicit Reply_Box();
+		Reply_Box(const Reply_Base &shareSocket);
+		~Reply_Box();
+
+		/*
+			Requests should be processed one-by-one.
+				Following a successful receive, a reply must be sent before the next receive.
+				Replies may only be sent after a receive.
+		*/
+		bool receive(nng::msg  &request);
+		void respond(nng::msg &&reply);
 
 
 		/*
-			Non-blocking service socket for replying to requests.
+			Automatically loop through requests and reply to them with a functor.
 		*/
-		class Rep_Box : public Rep_Async
+		template<class Fn>                 void respond_all(Fn fn)                  {nng::msg req; while (receive(req)) respond(fn(req));}
+		template<class Fn, class... Args>
+		void respond_all(Fn fn, Args&&... args)
 		{
-		public:
-			explicit Rep_Box();
-			Rep_Box(const Rep_Base &shareSocket);
-			~Rep_Box();
-
-			/*
-				Requests should be processed one-by-one.
-					Following a successful receive, a reply must be sent before the next receive.
-					Replies may only be sent after a receive.
-			*/
-			bool receive(nng::msg  &request);
-			void respond(nng::msg &&reply);
+			nng::msg req;
+			while (receive(req)) respond(fn(req, std::forward<Args>(args) ...));
+		}
 
 
-			/*
-				Automatically loop through requests and reply to them with a functor.
-			*/
-			template<class Fn>                 void respond_all(Fn fn)                  {nng::msg req; while (receive(req)) respond(fn(req));}
-			template<class Fn, class UserData> void respond_all(Fn fn, UserData arg)    {nng::msg req; while (receive(req)) respond(fn(arg, req));}
+	protected:
+		class Delegate;
+		void _init();
+		std::shared_ptr<Delegate> _replyBox;
 
-
-		protected:
-			class Delegate;
-			void _init();
-			std::shared_ptr<Delegate> _replyBox;
-
-			QueryID current_query = 0;
-		};
-	}
-
+		QueryID current_query = 0;
+	};
 }

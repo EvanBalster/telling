@@ -87,13 +87,7 @@
     <ClInclude Include="..\..\include\telling\io_queue.h">
       <Filter>common</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\include\telling\async_query.h">
-      <Filter>common</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\include\telling\service_registration.h">
-      <Filter>service</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\telling\service_base.h">
       <Filter>service</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\telling\deposit.h" />
@@ -107,7 +101,27 @@
     <ClInclude Include="..\..\include\telling\msg_uri.h">
       <Filter>msg</Filter>
     </ClInclude>
-    <ClInclude Include="weak_anchor.h" />
+    <ClInclude Include="..\..\include\telling\async_loop.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\service_base.h">
+      <Filter>service</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg.h">
+      <Filter>msg</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\service_reactor.h">
+      <Filter>service</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\client_base.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\uri_table.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\telling\msg_layout.h">
+      <Filter>msg</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\telling\client.cpp">
@@ -157,6 +171,12 @@
     </ClCompile>
     <ClCompile Include="..\..\src\telling\http_client.cpp">
       <Filter>http</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\service_reactor.cpp">
+      <Filter>service</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\telling\msg.cpp">
+      <Filter>msg</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

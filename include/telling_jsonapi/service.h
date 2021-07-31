@@ -12,7 +12,7 @@ namespace telling { namespace jsonapi
 	/*
 		A service for types which live in a common container.
 	*/
-	class Service_TypeCollection : public telling::Service_Async
+	class Service_TypeCollection : public telling::Service
 	{
 	public:
 		class Reactor : public telling::Reactor
@@ -30,23 +30,23 @@ namespace telling { namespace jsonapi
 					+  MethodCode::POST;
 			}
 
-			SendDirective recv_get    (QueryID id, const MsgView::Request &req, nng::msg &&msg) override;
-			SendDirective recv_head   (QueryID id, const MsgView::Request &req, nng::msg &&msg) override;
+			void recv_get    (QueryID id, const MsgView::Request &req, nng::msg &&msg) override;
+			void recv_head   (QueryID id, const MsgView::Request &req, nng::msg &&msg) override;
 
-			SendDirective recv_post   (QueryID id, const MsgView::Request &req, nng::msg &&msg) = 0;
+			void recv_post   (QueryID id, const MsgView::Request &req, nng::msg &&msg) = 0;
 		};
 	};
 
 	/*
 		Asynchronous service specialized for JSON API.
 	*/
-	class JService_Async : public telling::Service_Async
+	class JService : public telling::Service
 	{
 	public:
 		/*
 			Asynchronous events are delivered to a handler.
 		*/
-		class Handler : public telling::Service_Async::Handler
+		class Handler : public telling::Service::Handler
 		{
 		protected:
 			Methods allowed;
@@ -63,7 +63,7 @@ namespace telling { namespace jsonapi
 
 		protected:
 			// Implementation...
-			Directive     pull_recv   (            nng::msg &&msg) override
+			void pull_recv   (            nng::msg &&msg) override
 			{
 				MsgView::Request req
 				try
@@ -72,7 +72,7 @@ namespace telling { namespace jsonapi
 				}
 				auto d=recv(QueryID(0), std::move(request)); return d.directive;
 			}
-			SendDirective request_recv(QueryID id, nng::msg &&msg) override
+			void request_recv(QueryID id, nng::msg &&msg) override
 			{
 				return recv(id, std::move(request));
 			}

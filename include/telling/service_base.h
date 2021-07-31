@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 
 #include "service_registration.h"
 
@@ -47,14 +48,14 @@ namespace telling
 		/*
 			Access individual communicators.
 		*/
-		virtual service::Reply_Base   *replier()   noexcept = 0;
-		virtual service::Publish_Base *publisher() noexcept = 0;
-		virtual service::Pull_Base    *puller()    noexcept = 0;
+		virtual Reply_Base   *replier()   noexcept = 0;
+		virtual Publish_Base *publisher() noexcept = 0;
+		virtual Pull_Base    *puller()    noexcept = 0;
 
 		/*
 			Publish a message to a topic (URI).
 		*/
-		virtual void publish(nng::msg &&bulletin) = 0;
+		virtual void publish(nng::msg &&report) = 0;
 	};
 
 
@@ -63,15 +64,16 @@ namespace telling
 		Bare-bones base class for service handlers.
 	*/
 	class ServiceHandler_Base :
-		public AsyncSend,
-		public AsyncRecv,
-		public AsyncRespond
+		public AsyncReply,
+		public AsyncPublish,
+		public AsyncPull,
+		public Socket::PipeEventHandler
 	{
 	public:
-		virtual ~ServiceHandler_Base() {}
+		using QueryID = telling::QueryID;
 
-		using SendDirective = AsyncOp::SendDirective;
-		using Directive     = AsyncOp::Directive;
+	public:
+		~ServiceHandler_Base() override {}
 	};
 
 
@@ -82,50 +84,39 @@ namespace telling
 	class ServiceHandler : public ServiceHandler_Base
 	{
 	public:
-		virtual ~ServiceHandler() {}
+		using AsyncError = telling::AsyncError;
+		using Replying   = telling::Replying;
+		using Publishing = telling::Publishing;
+		using Pulling    = telling::Pulling;
 
-		using SendDirective = AsyncOp::SendDirective;
-		using Directive     = AsyncOp::Directive;
+
+	public:
+		~ServiceHandler() override {}
 
 
 	protected:
 		// Receive a pull message.
-		// There is no method for replying.
-		virtual Directive     pull_recv (nng::msg &&request) = 0;
-		virtual Directive     pull_error(nng::error)       {return AUTO;}
+		// void async_recv (Pulling, nng::msg &&request) -- REQUIRED
+		virtual void async_error(Pulling, AsyncError)       {}
 
-		// Receive a request.
-		// May respond immediately (return a msg) or later (via respondTo).
-		virtual SendDirective request_recv(QueryID id, nng::msg &&request) = 0;
+		// Request / Reply processing.
+		// void async_recv (Replying, nng::msg &&request) -- REQUIRED
+		void async_prep (Replying, nng::msg &)   override    {}
+		void async_sent (Replying)               override    {}
+		void async_error(Replying, AsyncError)   override    {}
 
-		// Reply processing status (optional).
-		// reply_error may be also be triggered if there is some error receiving a request.
-		virtual void          reply_sent (QueryID id)                {}
-		virtual Directive     reply_error(QueryID id, nng::error)    {return AUTO;}
-
-		// Publish outbox status (optional)
-		virtual SendDirective publish_sent ()              {return CONTINUE;}
-		virtual SendDirective publish_error(nng::error)    {return AUTO;}
+		// Publishing errors (optional)
+		void async_error(Publishing, AsyncError) override    {}
 
 		// Optionally receive pipe events from the various sockets.
-		virtual void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) {}
+		void pipeEvent(Socket*, nng::pipe_view, nng::pipe_ev) override    {}
 
 
 	private:
 		SendQueueMtx publishQueue;
 
-		// AsyncRespond impl.
-		SendDirective asyncRespond_recv (QueryID qid, nng::msg &&m)    final    {return this->request_recv(qid, std::move(m));}
-		void          asyncRespond_done (QueryID qid)                  final    {this->reply_sent(qid);}
-		Directive     asyncRespond_error(QueryID qid, nng::error e)    final    {return this->reply_error(qid, e);}
-
-		// AsyncRecv (Pull) impl.
-		Directive asyncRecv_msg  (nng::msg &&msg   ) final    {return this->pull_recv(std::move(msg));}
-		Directive asyncRecv_error(nng::error status) final    {return this->pull_error(status);}
-
 		// AsyncSend (Publish) impl.
-		SendDirective asyncSend_msg  (nng::msg &&msg)    final;
-		SendDirective asyncSend_sent ()                  final;
-		SendDirective asyncSend_error(nng::error status) final    {return this->publish_error(status);}
+		void async_prep (Publishing, nng::msg &msg) override;
+		void async_sent (Publishing)                override;
 	};
 }

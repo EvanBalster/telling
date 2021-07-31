@@ -4,118 +4,126 @@
 #include <deque>
 #include <mutex>
 #include <future>
-#include <robin_hood.h>
+#include <life_lock.h>
 #include <unordered_set>
 #include "socket.h"
 
-#include "async_query.h"
+#include "async_loop.h"
 
 
 namespace telling
 {
-	namespace client
+	// Type hierarchy
+	using Request_Pattern = Communicator::Pattern_Base<Role::CLIENT, Pattern::REQ_REP>;
+	class Request_Base; // inherits Request_Pattern
+	class Request;      // inherits Request_Base
+	class Request_Box;  // inherits Request
+
+	// Tag delivered to callbacks
+	using Requesting = TagQuery<Request>;
+
+	// Base class for asynchronous I/O
+	using AsyncReq     = AsyncQuery<Requesting>;
+	using AsyncRequest = AsyncReq;
+
+
+
+	// Base type for Request clients.
+	class Request_Base : public Request_Pattern
 	{
-		// Base type for Request clients.
-		using Req_Pattern = Communicator::Pattern_Base<Role::CLIENT, Pattern::REQ_REP>;
+	public:
+		Request_Base()                                      : Request_Pattern()           {}
+		Request_Base(const Request_Pattern &shareSocket)    : Request_Pattern(shareSocket) {}
+		~Request_Base() {}
+			
 
-		// Base type for Request clients.
-		class Req_Base : public Req_Pattern
+		/*
+			Get statistics
+		*/
+		struct MsgStats
 		{
-		public:
-			Req_Base()                               : Req_Pattern()           {}
-			Req_Base(const Req_Base &shareSocket)    : Req_Pattern(shareSocket) {}
-			~Req_Base() {}
-			
-			
-			/*
-				Get statistics
-			*/
-			struct MsgStats
-			{
-				size_t
-					awaiting_send,
-					awaiting_recv;
-			};
-
-			virtual MsgStats msgStats() const noexcept = 0;
+			size_t
+				awaiting_send,
+				awaiting_recv;
 		};
 
+		virtual MsgStats msgStats() const noexcept = 0;
+	};
 
-		// Shorthand & longhand
-		using                  Request_Base  = Req_Base;
-		class Req_Async; using Request_Async = Req_Async;
-		class Req_Box;   using Request_Box   = Req_Box;
+
+	/*
+		Request communicator that calls an AsyncRequest handler.
+	*/
+	class Request : public Request_Base
+	{
+	public:
+		/*
+			Construct with asynchronous I/O handler and optional socket-sharing.
+		*/
+		Request()                                                       : Request_Base() {}
+		Request(std::weak_ptr<AsyncReq> p)                              : Request() {initialize(p);}
+		Request(const Request_Pattern &shared)                          : Request_Base(shared) {}
+		Request(const Request_Pattern &s, std::weak_ptr<AsyncReq> p)    : Request(s) {initialize(p);}
+		~Request();
+
+		/*
+			Provide a handler for handling requests after construction.
+				Throws nng::exception if a handler has already been installed.
+		*/
+		void initialize(std::weak_ptr<AsyncReq>);
+
+		/*
+			Initiate a request.
+				May fail, throwing nng::exception.
+		*/
+		QueryID request(nng::msg &&msg);
 
 
 		/*
-			Request communicator that calls an AsyncQuery delegate.
+			Stats implementation
 		*/
-		class Req_Async : public Req_Base
+		MsgStats msgStats() const noexcept final;
+
+
+	protected:
+		std::weak_ptr<AsyncReq> _handler;
+
+		enum ACTION_STATE
 		{
-		public:
-			Req_Async(std::weak_ptr<AsyncQuery> p = {})                                 : Req_Base()            {initialize(p);}
-			Req_Async(const Req_Base &shareSocket, std::weak_ptr<AsyncQuery> p = {})    : Req_Base(shareSocket) {initialize(p);}
-			~Req_Async();
-
-			/*
-				Provide a delegate for handling requests after construction.
-					Throws nng::exception if a delegate has already been installed.
-			*/
-			void initialize(std::weak_ptr<AsyncQuery>);
-
-			/*
-				Initiate a request.
-					May fail, throwing nng::exception.
-			*/
-			QueryID request(nng::msg &&msg);
-
-
-			/*
-				Stats implementation
-			*/
-			MsgStats msgStats() const noexcept final;
-
-
-		protected:
-			std::weak_ptr<AsyncQuery> _delegate;
-
-			enum ACTION_STATE
-			{
-				IDLE = 0,
-				SEND = 1,
-				RECV = 2,
-			};
-
-			struct Action;
-			friend struct Action;
-			mutable std::mutex          mtx;
-			std::unordered_set<Action*> active;
-			std::deque<Action*>         idle;
+			IDLE = 0,
+			SEND = 1,
+			RECV = 2,
 		};
 
+		struct Action;
+		friend struct Action;
+		mutable std::mutex          mtx;
+		std::unordered_set<Action*> active;
+		std::deque<Action*>         idle;
+	};
+
+
+	/*
+		Non-blocking client socket for requests.
+			Supports multiple pending requests.
+			Requests are handled with std::future.
+	*/
+	class Request_Box : public Request
+	{
+	public:
+		explicit Request_Box();
+		Request_Box(const Request_Base &o);
+		~Request_Box();
 
 		/*
-			Non-blocking client socket for requests.
-				Supports multiple pending requests.
-				Requests are handled with std::future.
+			Send a request to the server.
 		*/
-		class Req_Box : public Req_Async
-		{
-		public:
-			explicit Req_Box();
-			Req_Box(const Req_Base &o);
-			~Req_Box();
-
-			/*
-				Send a request to the server.
-			*/
-			std::future<nng::msg> request(nng::msg &&msg);
+		std::future<nng::msg> request(nng::msg &&msg);
 
 
-		protected:
-			class Delegate;
-			void _init();
-			std::shared_ptr<Delegate> _requestBox;
-		};
-	}
+	protected:
+		class Delegate;
+		void _init();
+		std::shared_ptr<Delegate> _requestBox;
+	};
 }

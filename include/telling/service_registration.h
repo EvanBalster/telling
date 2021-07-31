@@ -2,7 +2,7 @@
 
 
 #include <string_view>
-#include "async_query.h"
+#include "async_loop.h"
 #include "client_request.h"
 
 
@@ -42,7 +42,7 @@ namespace telling
 
 	public:
 		class Delegate;
-		std::shared_ptr<AsyncQuery> delegate;
-		client::Request_Async       requester;
+		std::shared_ptr<Delegate> delegate;
+		Request                   requester;
 	};
 }

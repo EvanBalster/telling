@@ -2,381 +2,221 @@
 
 
 #include <memory>
+#include <string_view>
+
 #include <nngpp/aio.h>
 #include <nngpp/core.h>
 
 
 namespace telling
 {
-	class AsyncOp
-	{
-	public:
-		enum DIRECTIVE
-		{
-			// Default behavior based on status.
-			AUTO      = 0,
-
-			// Continue ongoing communications.
-			CONTINUE  = 1,
-
-			// Discard a message but continue communications.
-			DECLINE   = 2,
-
-			// Stop communications, canceling any which are in progress.
-			TERMINATE = 3,
-		};
-
-		struct Directive
-		{
-			DIRECTIVE directive;
-
-			Directive(DIRECTIVE d)     : directive(d) {}
-
-			operator DIRECTIVE() const noexcept    {return directive;}
-		};
-
-		struct SendDirective
-		{
-			DIRECTIVE directive;
-			nng::msg  sendMsg;
-
-			SendDirective(DIRECTIVE d)       : directive(d) {}
-			SendDirective(nng::msg &&msg)    : directive(AUTO), sendMsg(std::move(msg)) {}
-		};
-
-		struct QueryDirective
-		{
-			const Directive directive;
-			nng::aio        aio;
-			nng::msg        sendMsg;
-		};
-	};
+	/*
+		Recyclable unique ID used for request/reply patterns.
+	*/
+	using QueryID = decltype(nng_ctx::id);
 
 
 	class Socket;
 
 
 	/*
+		Data structure for an asynchronous error message.
+	*/
+	struct AsyncError
+	{
+		nng::error       nng_status;
+		std::string_view error_msg;
+
+		std::string_view what() const noexcept
+		{
+			return
+				error_msg.length() ? error_msg :
+				bool(nng_status)   ? nng::to_string(nng_status) :
+				"success";
+		}
+
+		operator nng::error      () const noexcept    {return nng_status;}
+		operator std::string_view() const noexcept    {return what();}
+
+		AsyncError()                : nng_status(nng::error::success) {}
+		AsyncError(nng::error e)    : nng_status(e)                   {}
+	};
+
+
+	/*
+		Asynchronous event handlers in this library derive from this base.
+			The class is templated with a "tag" type that is passed to all methods.
+			Tag does not need to contain any information.
+	*/
+	template<typename Tag>
+	class AsyncHandler
+	{
+	public:
+		virtual ~AsyncHandler()               {}
+
+		/*
+			Common asynchronous events:
+				start -- an I/O begins using the handler.
+				stop  -- an I/O finishes using the handler.
+
+			These messages bracket all other async calls from a given source.
+		*/
+		virtual void async_start(Tag)                       {}
+		virtual void async_stop (Tag, AsyncError status)    {}
+
+		/*
+			Failed to send or receive some message.
+			Common errors:
+				nng::error::canceled -- this action was canceled or the communicator shut down
+				nng::error::timedout -- ran out of time to send/receive a message
+		*/
+		virtual void async_error(Tag, AsyncError error)     {}
+	};
+
+
+	/*
 		Callback interface for receiving messages.
 			Used for PULL and SUBscribe protocols.
+			Tag is provided as a parameter to all methods of this interface.
+			Tag can be used to distinguish between protocols or callers.
 	*/
-	class AsyncRecv : public AsyncOp
+	template<typename Tag>
+	class AsyncRecv : public virtual AsyncHandler<Tag>
 	{
 	public:
 		virtual ~AsyncRecv() {}
 
 		/*
-			Asynchronous events.
-				Only one call with occur at a time per caller.
-				
-				asyncRecv_start -- optional; throw nng::exception to prevent
-				asyncRecv_msg   -- required; receive a message
-				asyncRecv_error -- recommended; error occurred receiving message
-				asyncRecv_stop  -- optional
+			Called when a message is received.
+				Return <message> to respond (if the protocol supports this).
+				Return CONTINUE to accept the message and continue receiving.
+				Return DECLINE to discard the message and continue receiving.
+				Return TERMINATE to stop receiving messages.
+				Return AUTO to let the system decide.
 		*/
-		virtual void      asyncRecv_start()                      {}
-		virtual Directive asyncRecv_msg  (nng::msg &&msg)        = 0;
-		virtual Directive asyncRecv_error(nng::error status)     {return AUTO;}
-		virtual void      asyncRecv_stop (nng::error status)     {}
-
-
-	public:
-		/*
-			Optional base class for AIO receiver that calls an AsyncRecv object.
-		*/
-		template<class T_RecvCtx>
-		class Operator
-		{
-		public:
-			Operator(T_RecvCtx &&_ctx);
-			~Operator();
-
-			// Start/stop receiving.  Start may throw exceptions on failure.
-			void recv_start(std::weak_ptr<AsyncRecv> _delegate);
-			void recv_stop ()  noexcept;
-
-			T_RecvCtx       &recv_ctx()       noexcept    {return _recv_ctx;}
-			const T_RecvCtx &recv_ctx() const noexcept    {return _recv_ctx;}
-
-			std::weak_ptr<AsyncRecv> recv_delegate() const    {return _recv_delegate;}
-
-		private:
-			nng::aio                 _recv_aio;
-			T_RecvCtx                _recv_ctx;
-			std::weak_ptr<AsyncRecv> _recv_delegate;
-		};
+		virtual void async_recv(Tag, nng::msg &&msg) = 0;
 	};
 
 	/*
 		Callback interface for sending messages.
 			Used for PUSH and PUBlish protocols.
-		
-		After a successful send, we may send another message by returning
-			CONTINUE and filling in sendMsg.
 	*/
-	class AsyncSend : public AsyncOp
+	template<class Tag>
+	class AsyncSend : public virtual AsyncHandler<Tag>
 	{
+	public:
+		using QueryID   = telling::QueryID;
+
 	public:
 		virtual ~AsyncSend() {}
 
 		/*
-			asyncSend has concurrency responsibilities.
-				"msg" should enqueue the message if another is sending or return it if not.
+			A message has been prepared for sending.  (Called from producer)
+				Return std::move(msg) to transmit it now.
+				Return CONTINUE if the message was queued for later sending.
+				Return DECLINE if the message is discarded.
+			
+			It is appropriate to throw exceptions from this method,
+				when messages can't be accepted for some reason.
+		*/
+		virtual void async_prep(Tag, nng::msg &msg) = 0;
+
+		/*
+			A message has been sent successfully.  (Called from AIO system)
+				Return <a message> to transmit another message now, if supported.
+				Return CONTINUE to finish up.
+		*/
+		virtual void async_sent(Tag)           = 0;
+
+		/*
+			NOTE:
+				AsyncSend often has concurrency responsibilities:
+				"send" should enqueue the message if another is sending or return it if not.
 				"sent" notifies that one message has finished sending.
 		*/
-		virtual SendDirective asyncSend_msg  (nng::msg &&msg)       = 0;
-		virtual SendDirective asyncSend_sent ()                     = 0;
-		virtual SendDirective asyncSend_error(nng::error status)    {return AUTO;}
-		virtual void          asyncSend_stop (nng::error status)    {}
-
-
-	public:
-		/*
-			Optional base class for AIO sender that calls an AsyncSend object.
-		*/
-		template<class T_SendCtx>
-		class Operator
-		{
-		public:
-			Operator(T_SendCtx &&_ctx);
-			~Operator();
-
-			/*
-				send_msg may throw an exception if the delegate refuses.
-				send_stop halts sending.
-			*/
-			void send_init(std::weak_ptr<AsyncSend> _delegate);
-			void send_msg (nng::msg &&msg);
-			void send_stop()              noexcept;
-
-			T_SendCtx       &send_ctx()       noexcept    {return _send_ctx;}
-			const T_SendCtx &send_ctx() const noexcept    {return _send_ctx;}
-
-			std::weak_ptr<AsyncSend> send_delegate() const    {return _send_delegate;}
-
-		private:
-			nng::aio                 _send_aio;
-			T_SendCtx                _send_ctx;
-			std::weak_ptr<AsyncSend> _send_delegate;
-		};
 	};
 
 
 	/*
-		Implementation stuff follows...
+		Callback interface for sending queries and getting responses.
+			Used for REQuest protocol, maybe Surveyor in the future.
+
+		Tag may be a "query ID" used for tracking pending requests.
 	*/
-	namespace detail
+	template<class Tag>
+	class AsyncQuery : public AsyncSend<Tag>, public AsyncRecv<Tag>
 	{
-		template<auto Member_aio, auto Member_ctx, auto Member_delegate, typename T_Self>
-		void AsyncRecv_Callback_Self(void *_self)
-		{
-			auto *self = static_cast<T_Self*>(_self);
-			nng::aio   &aio      =  self->*Member_aio;
-			auto       &ctx      =  self->*Member_ctx;
-			const auto  delegate = (self->*Member_delegate).lock();
+	public:
+		virtual ~AsyncQuery() {}
 
-			nng::error aioResult = aio.result();
-
-			if (!delegate)
-			{
-				// Stop receiving if there is no delegate.
-				if (aioResult == nng::error::success) aio.release_msg();
-				return;
-			}
-
-			AsyncOp::Directive directive =
-				(aioResult == nng::error::success)
-				? delegate->asyncRecv_msg  (aio.release_msg())
-				: delegate->asyncRecv_error(aioResult);
-
-			switch (directive.directive)
-			{
-			default:
-			case AsyncOp::AUTO:
-				if (aioResult != nng::error::success)
-				{
-					[[fallthrough]]; case AsyncOp::TERMINATE:
-					delegate->asyncRecv_stop(aioResult);
-					return;
-				}
-				else
-				{
-					[[fallthrough]]; case AsyncOp::CONTINUE: case AsyncOp::DECLINE:
-					ctx.recv(aio);
-				}
-				break;
-			}
-		}
-
-		template<auto Member_aio, auto Member_ctx, auto Member_delegate, typename T_Self>
-		void AsyncRecv_Setup(T_Self *self)
-		{
-			nng::aio   &aio      = self->*Member_aio;
-			//auto       &ctx      = self->*Member_ctx;
-			//const auto &delegate = self->*Member_delegate;
-			aio = nng::make_aio(&AsyncRecv_Callback_Self<Member_aio, Member_ctx, Member_delegate, T_Self>, self);
-		}
-
-		// Utility: an AIO callback suitable for most uses.
-		template<auto Member_aio, auto Member_ctx, auto Member_delegate, typename T_Self>
-		void AsyncSend_Callback_Self(void *_self)
-		{
-			auto *self = static_cast<T_Self*>(_self);
-			nng::aio   &aio      =  self->*Member_aio;
-			auto       &ctx      =  self->*Member_ctx;
-			const auto  delegate = (self->*Member_delegate).lock();
-
-			nng::error aioResult = aio.result();
-
-			if (!delegate)
-			{
-				// Stop sending if there is no delegate.
-				return;
-			}
-
-			AsyncOp::SendDirective directive =
-				(aioResult == nng::error::success)
-				? delegate->asyncSend_sent ()
-				: delegate->asyncSend_error(aioResult);
-
-			switch (directive.directive)
-			{
-			default:
-			case AsyncOp::AUTO:
-				if (aioResult == nng::error::success)
-				{
-					[[fallthrough]]; case AsyncOp::CONTINUE:
-					if (directive.sendMsg)
-					{
-						aio.set_msg(std::move(directive.sendMsg));
-						ctx.send(aio);
-						break;
-					}
-				}
-				[[fallthrough]];
-
-			case AsyncOp::DECLINE:
-			case AsyncOp::TERMINATE:
-				return;
-			}
-		}
-
-		template<auto Member_aio, auto Member_ctx, auto Member_delegate, typename T_Self>
-		void AsyncSend_Setup(T_Self *self)
-		{
-			nng::aio   &aio      = self->*Member_aio;
-			//auto       &ctx      = self->*Member_ctx;
-			//const auto &delegate = self->*Member_delegate;
-			aio = nng::make_aio(&AsyncSend_Callback_Self<Member_aio, Member_ctx, Member_delegate, T_Self>, self);
-		}
-	}
+		/*
+			Asynchronous events (see AsyncSend & AsyncRecv)
+				AsyncSend   ::async_prep  -- a new request (may be modified or deleted)
+				AsyncSend   ::async_sent  -- a request has been sent.
+				AsyncRecv   ::async_recv  -- a response has been received.
+				AsyncHandler::async_error -- the query failed somehow.
+		*/
+		virtual void async_prep(Tag, nng::msg &)    {}    // Optional
+	};
 
 
-	template<typename T_RecvCtx>
-	AsyncRecv::Operator<T_RecvCtx>::Operator(T_RecvCtx &&_ctx) :
-		_recv_ctx(std::move(_ctx))
+	/*
+		Callback interface for responding to messages.
+			Used for REPly protocol, maybe Responder in the future.
+
+		Tag may be a "query ID" used for tracking pending requests.
+	*/
+	template<class Tag>
+	class AsyncRespond : public AsyncRecv<Tag>, public AsyncSend<Tag>
 	{
-		detail::AsyncRecv_Setup<
-			&Operator::_recv_aio,
-			&Operator::_recv_ctx,
-			&Operator::_recv_delegate>
-			(this);
-	}
-	template<typename T_RecvCtx>
-	AsyncRecv::Operator<T_RecvCtx>::~Operator()
+	public:
+		virtual ~AsyncRespond() {}
+
+		/*
+			Asynchronous events (see AsyncSend & AsyncRecv)
+				AsyncRecv   ::async_recv  -- a request has been received (may return a reply)
+				AsyncSend   ::async_prep  -- a response has been prepared (may be modified or deleted)
+				AsyncSend   ::async_sent  -- a response has been sent.
+				AsyncHandler::async_error -- failed to handle a request or response.
+
+			The Tag passed to async_recv will typically provide a method for replying,
+				either immediately from async_recv and/or later on.
+		*/
+		virtual void async_prep(Tag, nng::msg &)    {}    // Optional
+	};
+
+
+
+	/*
+		A feature for tags that support reacting to an event with a message.
+
+		Used...
+			- in AsyncSend::async_sent, to send another message immediately
+			- in AsyncRespond::async_recv, to send a response immediately
+	*/
+	struct SendPrompt
 	{
-		recv_stop();
-	}
+		nng::msg *_msg;
 
-	template<typename T_RecvCtx>
-	void AsyncRecv::Operator<T_RecvCtx>::recv_start(std::weak_ptr<AsyncRecv> _delegate)
-	{
-		if (_recv_delegate.lock())
-			throw nng::exception(nng::error::busy, "Receive start: already started");
+		void setDest(nng::msg &msg)           noexcept    {_msg = &msg;}
 
-		if (auto delegate = _delegate.lock())
-		{
-			_recv_delegate = std::move(_delegate);
-			delegate->asyncRecv_start(); // May throw
-			_recv_ctx.recv(_recv_aio);
-		}
-	}
-	template<typename T_RecvCtx>
-	void AsyncRecv::Operator<T_RecvCtx>::recv_stop() noexcept
-	{
-		_recv_aio.stop();
-		if (auto delegate = _recv_delegate.lock())
-			delegate->asyncRecv_stop(nng::error::success);
-	}
+		explicit operator bool()        const noexcept    {return _msg;}
+		void operator()(nng::msg &&msg) const noexcept    {if (_msg) *_msg = std::move(msg);}
+	};
 
 
-	template<typename T_SendCtx>
-	AsyncSend::Operator<T_SendCtx>::Operator(T_SendCtx &&_ctx) :
-		_send_ctx(_ctx)
-	{
-		detail::AsyncSend_Setup<
-			&Operator::_send_aio,
-			&Operator::_send_ctx,
-			&Operator::_send_delegate>
-			(this);
-	}
-	template<typename T_SendCtx>
-	AsyncSend::Operator<T_SendCtx>::~Operator()
-	{
-		_send_aio.stop();
-		if (auto delegate = _send_delegate.lock())
-			delegate->asyncSend_stop(nng::error::success);
-	}
+	/*
+		Optional conventions for async I/O tags.
+			AsyncSendLoop depends on SendPrompt's behavior.
+	*/
+	template<class Comm> struct TagRecv    {Comm *comm;};
+	template<class Comm> struct TagSend    {Comm *comm;             SendPrompt send;};
+	template<class Comm> struct TagQuery   {Comm *comm; QueryID id;};
+	template<class Comm> struct TagRespond {Comm *comm; QueryID id; SendPrompt send;};
 
-	template<typename T_SendCtx>
-	void AsyncSend::Operator<T_SendCtx>::send_init(std::weak_ptr<AsyncSend> _delegate)
-	{
-		if (_send_delegate.lock())
-			throw nng::exception(nng::error::busy, "Send start: already started");
-
-		if (auto delegate = _delegate.lock())
-		{
-			_send_delegate = std::move(_delegate);
-		}
-	}
-
-	template<typename T_SendCtx>
-	void AsyncSend::Operator<T_SendCtx>::send_msg(nng::msg &&msg)
-	{
-		auto delegate = _send_delegate.lock();
-
-		SendDirective directive =
-			(delegate
-				? delegate->asyncSend_msg(std::move(msg))
-				: SendDirective(TERMINATE));
-		
-		switch (directive.directive)
-		{
-		default:
-		case AUTO:
-			if (directive.sendMsg)
-			{
-				_send_aio.set_msg(std::move(directive.sendMsg));
-				_send_ctx.send(_send_aio);
-				return;
-			}
-			else
-			{
-				[[fallthrough]]; case CONTINUE:
-				return;
-			}
-
-		case DECLINE:
-			throw nng::exception(nng::error::nospc, "AsyncSend delegate declined the message.");
-
-		case TERMINATE:
-			send_stop();
-			throw nng::exception(nng::error::closed, "AsyncSend delegate terminated transmission.");
-		}
-	}
-	template<typename T_SendCtx>
-	void AsyncSend::Operator<T_SendCtx>::send_stop() noexcept
-	{
-		_send_aio.stop();
-	}
+	// Void specializations of the above templates.
+	template<> struct TagRecv   <void> {};
+	template<> struct TagSend   <void> {            SendPrompt send;};
+	template<> struct TagQuery  <void> {QueryID id;};
+	template<> struct TagRespond<void> {QueryID id; SendPrompt send;};
 }

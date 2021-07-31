@@ -6,21 +6,42 @@
 using namespace telling;
 
 
-nng::msg MsgException::writeReply(std::string_view error_context) const
+nng::msg ReplyableException::replyWithError(std::string_view error_context) const
 {
-	auto msg = WriteReply(StatusCode::BadRequest);
+	auto msg = WriteReply(replyStatus());
 	msg.writeHeader("Content-Type", "text/plain");
 
-	msg.writeData("Message Exception in `");
-	msg.writeData(error_context);
-	msg.writeData("`:\r\n\t`");
-	msg.writeData(what());
-	if (position && length)
+	auto body = msg.writeBody();
+
+	if (error_context.length())
 	{
-		msg.writeData("`\r\nAt location:\r\n\t`");
-		msg.writeData(std::string_view(position, length));
+		body << error_context << ": ";
 	}
-	msg.writeData("`\r\n");
+	body << what();
+
+	return msg.release();
+}
+
+
+nng::msg MsgException::replyWithError(std::string_view error_context) const
+{
+	auto msg = WriteReply(replyStatus());
+	msg.writeHeader("Content-Type", "text/plain");
+
+	auto body = msg.writeBody();
+
+	if (error_context.length())
+	{
+		body << " in `" << error_context << "`:\r\n\t";
+	}
+	body << what();
+
+	if (excerpt.length())
+	{
+		body << "\r\nAt location:\r\n\t`"
+			<< excerpt << "`";
+	}
+	body << "\r\n";
 
 	return msg.release();
 }

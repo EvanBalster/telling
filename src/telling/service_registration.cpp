@@ -6,22 +6,20 @@
 using namespace telling;
 
 
-class Registration::Delegate : public AsyncQuery
+class Registration::Delegate : public AsyncRequest
 {
 public:
 	STATUS         status = INITIAL;
 	nng::exception except  = nng::exception(nng::error::success);
 
-	Directive asyncQuery_made (QueryID, const nng::msg &query) final
+	void async_prep (Requesting, nng::msg &query) final
 	{
-		return CONTINUE;
 	}
-	Directive asyncQuery_sent (QueryID)                        final
+	void async_sent (Requesting)             final
 	{
 		status = REQUESTED;
-		return CONTINUE;
 	}
-	Directive asyncQuery_done (QueryID, nng::msg &&response)   final
+	void async_recv(Requesting, nng::msg &&response) final
 	{
 		auto reply = MsgView::Reply(response);
 
@@ -30,7 +28,6 @@ public:
 		if (repStatus.isSuccessful())
 		{
 			status = ENLISTED;
-			return CONTINUE;
 		}
 		else
 		{
@@ -64,14 +61,12 @@ public:
 
 			status = FAILED;
 			except = nng::exception(errType, errSrc);
-			return TERMINATE;
 		}
 	}
-	Directive asyncQuery_error(QueryID, nng::error error)      final
+	void async_error(Requesting req, AsyncError error) final
 	{
 		status = FAILED;
 		except = nng::exception(error, "Registration Networking Error");
-		return CONTINUE;
 	}
 };
 
@@ -89,9 +84,8 @@ Registration::Registration(
 	if (!servicePath_alias.length()) servicePath_alias = servicePath;
 
 	MsgWriter msg = WriteRequest("*services", MethodCode::POST);
-	msg.writeData(servicePath_alias);
-	msg.writeData("\n");
-	msg.writeData(servicePath);
+	msg.writeBody()
+		<< servicePath_alias << "\n" << servicePath;
 
 	requester.request(msg.release());
 }
@@ -103,10 +97,10 @@ Registration::~Registration()
 
 Registration::STATUS Registration::status() const noexcept
 {
-	return static_cast<Delegate*>(&*delegate)->status;
+	return delegate->status;
 }
 
 const nng::exception &Registration::exception() const noexcept
 {
-	return static_cast<Delegate*>(&*delegate)->except;
+	return delegate->except;
 }
