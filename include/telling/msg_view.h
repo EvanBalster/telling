@@ -90,6 +90,9 @@ namespace telling
 		nng::basic_imsgstream<C,Tr> readBody()                        const noexcept    {return nng::basic_imsgstream<C,Tr>(bodyBuf<C,Tr>(std::ios::in | std::ios::binary));}
 
 		template<typename C=char, class Tr=std::char_traits<C>>
+		nng::basic_omsgstream<C,Tr> writeBody()                       const noexcept    {return nng::basic_omsgstream<C,Tr>(bodyBuf<C,Tr>(std::ios::out | std::ios::binary | std::ios::ate));}
+
+		template<typename C=char, class Tr=std::char_traits<C>>
 		nng::basic_msgbuf<C,Tr>     bodyBuf (std::ios::openmode mode) const noexcept    {nng::basic_msgbuf<C,Tr> buf; buf.open_range(msg, mode, _p_body); return buf;}
 
 

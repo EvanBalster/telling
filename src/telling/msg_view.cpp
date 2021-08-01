@@ -119,7 +119,7 @@ void MsgLayout::_parse_msg(nng::view msg, TYPE _type)
 	if (!msg.data())
 		throw MsgException(MsgError::HEADER_INCOMPLETE, "Message data pointer is null");
 
-	std::string_view startLine;
+	std::string_view startLine, headerLine;
 	_parse_reset();
 	const char *header_beg = nullptr;
 
@@ -138,9 +138,9 @@ void MsgLayout::_parse_msg(nng::view msg, TYPE _type)
 		while (true)
 		{
 			bol = pos;
-			auto line = ConsumeLine(pos, end);
-			if (line.length() == 0) break;
-			if (pos == end) throw MsgException(MsgError::HEADER_INCOMPLETE, line);
+			headerLine = ConsumeLine(pos, end);
+			if (headerLine.length() == 0) break;
+			if (pos == end) throw MsgException(MsgError::HEADER_INCOMPLETE, headerLine);
 		}
 
 		// Body

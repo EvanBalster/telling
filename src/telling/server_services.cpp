@@ -231,7 +231,7 @@ void Server::Services::run_management_thread()
 			/*
 				Create service sockets and dial the service.
 			*/
-			log << Name() << ": registering service `" << spec.map_uri << "`...";
+			log << Name() << ": registering service `" << spec.map_uri << "`..." << endl;
 
 			try
 			{
