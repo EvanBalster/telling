@@ -6,16 +6,16 @@ using namespace telling;
 
 
 
-Server::PubSub::PubSub()
+Server::PubSub::PubSub(Server &_server) :
+	server(_server)
 {
-	auto server = this->server();
-	auto &log = server->log;
+	auto &log = server.log;
 
 	// The subscriber is a relay, and accepts all topics.
 	subscribe.subscribe("");
 
 	// Relay service events to internal modules (dial-in mvechanism)
-	subscribe.listen(server->address_internal);
+	subscribe.listen(server.address_internal);
 
 	subscribe.initialize(get_weak());
 }
@@ -31,19 +31,18 @@ Server::PubSub::~PubSub()
 
 void Server::PubSub::async_error(Subscribing, AsyncError error)
 {
-	server()->log << Name() << ": ingestion error: " << error.what() << std::endl;
+	server.log << Name() << ": ingestion error: " << error.what() << std::endl;
 }
 
 void Server::PubSub::async_recv(Subscribing, nng::msg &&msg)
 {
 	// No mutex needed; this AIO is the only sender.
 
-	auto server = this->server();
-	auto &log = server->log;
+	auto &log = server.log;
 
 	MsgView::Report report;
 	try                    {report = msg;}
-	catch (MsgException e) {server->log << Name() << ": message exception: " << e.what() << std::endl; return;}
+	catch (MsgException e) {server.log << Name() << ": message exception: " << e.what() << std::endl; return;}
 
 	//log << Name() << ": publishing on URI `" << report.uri() << "`" << std::endl;
 

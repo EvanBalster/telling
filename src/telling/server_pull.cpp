@@ -5,10 +5,10 @@ using namespace telling;
 
 
 
-Server::PushPull::PushPull()
+Server::PushPull::PushPull(Server &_server) :
+	server(_server)
 {
-	auto server = this->server();
-	auto &log = server->log;
+	auto &log = server.log;
 
 	pull.initialize(get_weak());
 }
@@ -23,20 +23,18 @@ Server::PushPull::~PushPull()
 
 void Server::PushPull::async_error(Pulling, AsyncError error)
 {
-	//server()->log << Name() << ": ingestion error: " << error.what() << std::endl;
+	//server.log << Name() << ": ingestion error: " << error.what() << std::endl;
 }
 
 void Server::PushPull::async_recv(Pulling, nng::msg &&msg)
 {
-	auto server = this->server();
-
 	MsgView::Request request;
 	try                    {request = msg;}
-	catch (MsgException e) {server->log << Name() << ": message exception: " << e.what() << std::endl; return;}
+	catch (MsgException e) {server.log << Name() << ": message exception: " << e.what() << std::endl; return;}
 
-	auto status = server->services.routePush(request.uri(), std::move(msg));
+	auto status = server.services.routePush(request.uri(), std::move(msg));
 
-	//server->log << Name() << ": pushing to URI `" << request.uri() << "`" << std::endl;
+	//server.log << Name() << ": pushing to URI `" << request.uri() << "`" << std::endl;
 
 	if (status.isSuccessful())
 	{
@@ -45,7 +43,7 @@ void Server::PushPull::async_recv(Pulling, nng::msg &&msg)
 	else
 	{
 		// Log the error.
-		server->log << Name() << ": error " << status << " (" << status.reasonPhrase()
+		server.log << Name() << ": error " << status << " (" << status.reasonPhrase()
 			<< ") routing to `" << request.uri() << "`" << std::endl;
 
 		// There's no opportunity to reply, so the failed message is discarded.

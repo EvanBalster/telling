@@ -7,7 +7,8 @@ using namespace telling;
 using std::endl;
 
 
-Server::Services::Services()
+Server::Services::Services(Server &_server) :
+	server(_server)
 {
 	register_reply.initialize(get_weak());
 
@@ -17,10 +18,10 @@ Server::Services::Services()
 
 
 	// Responders may dial in and request registration
-	register_reply.listen(server()->address_register);
+	register_reply.listen(server.address_register);
 
 	// Publish service events
-	publish_events.dial(server()->address_internal);
+	publish_events.dial(server.address_internal);
 
 
 
@@ -49,14 +50,13 @@ void Server::Services::async_sent(Replying rep)
 }
 void Server::Services::async_error(Replying rep, AsyncError status)
 {
-	server()->log << Name()
+	server.log << Name()
 		<< ": Registration Responder error: " << nng::to_string(status) << std::endl;
 }
 
 void Server::Services::async_recv(Replying rep, nng::msg &&_msg)
 {
-	auto server = this->server();
-	auto &log = server->log;
+	auto &log = server.log;
 
 	auto queryID = rep.id;
 
@@ -138,8 +138,7 @@ void Server::Services::pipeEvent(Socket *socket, nng::pipe_view pipe, nng::pipe_
 		return;
 	}
 	
-	auto server = this->server();
-	auto &log = server->log;
+	auto &log = server.log;
 
 	auto pipeID = pipe.get().id;
 
@@ -180,8 +179,7 @@ void Server::Services::run_management_thread()
 {
 	std::unique_lock lock(mtx);
 
-	auto server = this->server();
-	auto &log = server->log;
+	auto &log = server.log;
 
 	auto &to_open = management.route_open;
 	auto &to_close = management.route_close;
@@ -192,7 +190,7 @@ void Server::Services::run_management_thread()
 		{
 			auto route = to_close.front();
 			to_close.pop_front();
-			server->publish.subscribe.disconnect(route->path);
+			server.publish.subscribe.disconnect(route->path);
 
 			// Publish existence of new service?
 			auto report = WriteReport("*services", StatusCode::Gone);
@@ -237,10 +235,10 @@ void Server::Services::run_management_thread()
 
 			try
 			{
-				Route &sockets = **map.emplace(spec.map_uri, new Route(*server, std::string(spec.map_uri))).first;
+				Route &sockets = **map.emplace(spec.map_uri, new Route(server, std::string(spec.map_uri))).first;
 
 				// Connect pub-sub
-				server->publish.subscribe.dial(spec.host);
+				server.publish.subscribe.dial(spec.host);
 
 
 				sockets.dial(spec.host);
@@ -272,8 +270,8 @@ void Server::Services::run_management_thread()
 			auto notify = WriteReply();
 			notify.writeHeader("Content-Type", "text/plain");
 			notify.writeBody()
-				<< spec.map_uri;
-				"\nEnrolled with this URI.";
+				<< spec.map_uri
+				<< "\nEnrolled with this URI.";
 			register_reply.respondTo(spec.queryID, notify.release());
 
 			// Publish existence of new service

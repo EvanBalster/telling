@@ -36,7 +36,11 @@ Server::Server(std::ostream *_log, std::string_view _id, bool open_inproc) :
 	ID(_id),
 	address_register(HostAddress::Base::InProc(ID + "/register")),
 	address_internal(HostAddress::Base::InProc(ID + "/internal")),
-	log(_log ? *_log : server_detail::nullOutput)
+	log(_log ? *_log : server_detail::nullOutput),
+	publish (*this),
+	pull    (*this),
+	reply   (*this),
+	services(*this)
 {
 	if (open_inproc) open(HostAddress::Base::InProc(ID));
 }

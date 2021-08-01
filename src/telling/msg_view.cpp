@@ -113,6 +113,11 @@ start_line_malformed:
 void MsgLayout::_parse_msg(nng::view msg, TYPE _type)
 {
 	using namespace telling::detail;
+	
+	if (msg.size() == 0)
+		throw MsgException(MsgError::HEADER_INCOMPLETE, "Message data is empty (no header)");
+	if (!msg.data())
+		throw MsgException(MsgError::HEADER_INCOMPLETE, "Message data pointer is null");
 
 	std::string_view startLine;
 	_parse_reset();

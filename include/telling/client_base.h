@@ -90,7 +90,7 @@ namespace telling
 	protected:
 		// Subscription processing
 		// void async_recv (Subscribing, nng::msg &&report) -- REQUIRED
-		void async_error(Subscribing, AsyncError)         {}
+		void async_error(Subscribing, AsyncError) override    {}
 
 		// Request/reply processing
 		void async_prep (Requesting req, nng::msg &) override    {}

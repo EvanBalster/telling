@@ -95,17 +95,18 @@ namespace telling
 		class PubSub : public AsyncRecv<Subscribing>
 		{
 		public:
-			PubSub();
+			PubSub(Server&);
 			~PubSub();
 
 			std::weak_ptr<PubSub> get_weak()    {return async_lifetime.get_weak(this);}
 
-			Server *server();
 			static const char *Name()    {return "*PUB";}
 			Socket &hostSocket()         {return *publish.socket();}
 
 		protected:
 			friend class Services; // for now
+			
+			Server &server;
 
 			Subscribe   subscribe;
 			Publish_Box publish;
@@ -123,16 +124,17 @@ namespace telling
 		class PushPull : public AsyncRecv<Pulling>
 		{
 		public:
-			PushPull();
+			PushPull(Server&);
 			~PushPull();
 
 			std::weak_ptr<PushPull> get_weak()    {return async_lifetime.get_weak(this);}
 
-			Server *server();
 			static const char *Name()    {return "*PULL";}
 			Socket &hostSocket()         {return *pull.socket();}
 
 		protected:
+			Server &server;
+			
 			Pull pull;
 
 			void async_recv (Pulling, nng::msg&&) override;
@@ -156,17 +158,18 @@ namespace telling
 			public AsyncRecv<ServiceReplying>
 		{
 		public:
-			ReqRep();
+			ReqRep(Server&);
 			~ReqRep();
 
 			std::weak_ptr<ReqRep> get_weak()    {return async_lifetime.get_weak(this);}
 
-			Server *server();
 			static const char *Name()    {return "*REP";}
 			Socket &hostSocket()         {return reply_ext;}
 
 
 		protected:
+			Server &server;
+			
 			Socket
 				reply_ext,   // <--> clients
 				request_dvc, // connects int and ext with a device
@@ -340,29 +343,18 @@ namespace telling
 
 
 		public:
-			Services();
+			Services(Server&);
 			~Services();
 
 			std::weak_ptr<Services> get_weak()    {return async_lifetime.get_weak(this);}
 
-			Server *server();
 			static const char *Name()    {return "*services";}
 
 		protected:
+			Server &server;
+		
 			edb::life_lock_self async_lifetime;
 		}
 			services;
 	};
-
-
-	#define TELLING_SERVER_FROM_MODULE(self, member) \
-		reinterpret_cast<telling::Server*>(intptr_t(self) - \
-			ptrdiff_t(offsetof(telling::Server, member)))
-
-	inline Server *Server::Services::server() {return TELLING_SERVER_FROM_MODULE(this, services);}
-	inline Server *Server::ReqRep  ::server() {return TELLING_SERVER_FROM_MODULE(this, reply);}
-	inline Server *Server::PubSub  ::server() {return TELLING_SERVER_FROM_MODULE(this, publish);}
-	inline Server *Server::PushPull::server() {return TELLING_SERVER_FROM_MODULE(this, pull);}
-
-	#undef TELLING_SERVER_FROM_MODULE
 }

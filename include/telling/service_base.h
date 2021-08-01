@@ -97,7 +97,7 @@ namespace telling
 	protected:
 		// Receive a pull message.
 		// void async_recv (Pulling, nng::msg &&request) -- REQUIRED
-		virtual void async_error(Pulling, AsyncError)       {}
+		virtual void async_error(Pulling, AsyncError) override    {}
 
 		// Request / Reply processing.
 		// void async_recv (Replying, nng::msg &&request) -- REQUIRED
