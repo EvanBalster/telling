@@ -14,6 +14,7 @@
 #include <nngpp/url.h>
 
 #include "async_loop.h"
+#include "msg_view.h"
 #include "host_address.h"
 
 
@@ -77,6 +78,9 @@ namespace telling
 
 			virtual void      httpConn_open  (conn_view conn) {}
 			virtual void      httpConn_close (conn_view conn) {}
+
+			// Optional progress notification
+			virtual void async_response_progress(HttpRequesting, MsgCompletion, const MsgView::Reply&) {}
 
 			void async_prep (HttpRequesting, nng::msg &query) override     {}
 			void async_sent (HttpRequesting)                  override     {}

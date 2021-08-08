@@ -14,6 +14,21 @@
 namespace telling
 {
 	/*
+		This type is used to report completeness of messages,
+			usually for HTTP requests and replies.
+	*/
+	struct MsgCompletion
+	{
+		bool   complete;       // -> message appears to be complete
+		bool   is_chunked;     // -> message is chunked
+		bool   length_header;  // -> message specifies content-length
+		size_t message_length; // -> specified length
+
+		// Implicit message completion (usually triggered by disconnect)
+		bool implicit() const noexcept    {return !is_chunked && !length_header;}
+	};
+
+	/*
 		MsgView parses a message according to Telling's HTTP-like format.
 	*/
 	class MsgView : protected MsgLayout
@@ -94,6 +109,13 @@ namespace telling
 
 		template<typename C=char, class Tr=std::char_traits<C>>
 		nng::basic_msgbuf<C,Tr>     bodyBuf (std::ios::openmode mode) const noexcept    {nng::basic_msgbuf<C,Tr> buf; buf.open_range(msg, mode, _p_body); return buf;}
+
+
+		/*
+			Assess whether a message appears to be complete.
+				This may be unknown in the case of HTTP messages.
+		*/
+		MsgCompletion completion() const noexcept;
 
 
 

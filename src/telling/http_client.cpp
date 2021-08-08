@@ -2,6 +2,7 @@
 #include <nngpp/aio.h>
 
 #include <telling/http_client.h>
+#include <telling/msg_view.h>
 
 
 using namespace telling;
@@ -12,13 +13,16 @@ struct HttpClient::Action
 	friend class Request;
 
 	HttpClient* const client;
-	QueryID                 queryID;
-	nng::aio                aio;
-	nng_iov                 iov;
-	nng::msg                req;
-	nng::msg                res;
-	nng::http::conn         conn;
-	ACTION_STATE            state;
+	QueryID           queryID;
+	nng::aio          aio;
+	nng_iov           iov;
+	nng::msg          req;
+	nng::msg          res;
+	nng::http::conn   conn;
+	ACTION_STATE      state;
+
+	MsgCompletion     res_completion = {};
+	size_t            recv_count = 0;
 
 	HttpRequesting requesting() const noexcept    {return HttpRequesting{client, queryID};}
 
@@ -146,14 +150,13 @@ void HttpClient::Action::_callback(void *_action)
 	auto client = action->client;
 	auto handler = client->_handler.lock();
 
-	bool cleanup = false;
-	bool cancel  = false;
+	bool disconnect = false;
 
 	// Callbacks / Errors?
 	auto error = action->aio.result();
 	if (!handler)
 	{
-		cancel = true;
+		disconnect = true;
 	}
 	else switch (error)
 	{
@@ -171,34 +174,76 @@ void HttpClient::Action::_callback(void *_action)
 			break;
 		case RECV:
 			// Receive the response
-			action->res.body().chop(action->res.body().size() - action->aio.count());
-			handler->async_recv(action->requesting(), std::move(action->res));
-			action->res = nng::msg();
-			cleanup = true;
+			action->recv_count += action->aio.count();
+			action->res.realloc(action->recv_count);
+			try
+			{
+				// Test for completeness
+				MsgView::Reply msg(action->res);
+
+				action->res_completion = msg.completion();
+
+				handler->async_response_progress(action->requesting(), action->res_completion, msg);
+			}
+			catch (MsgException &e)
+			{
+				// Not complete I guess
+			}
+			break;
+			//action->res = nng::msg();
 		default:
 		case IDLE:
 			// Shouldn't happen???
-			cleanup = true;
+			disconnect = true;
 			break;
 		}
 		break;
+
+	case nng::error::connaborted:
+	case nng::error::connreset:
+	case nng::error::connshut:
+	case nng::error::closed:
+		// 
+		if (action->res_completion.implicit())
+		{
+			break;
+		}
+		else
+		{
+			[[fallthrough]];
+		}
+
 	case nng::error::canceled:
 	case nng::error::timedout:
 	default:
 		// Causes the query to be canceled.
+		action->res_completion = {};
 		handler->async_error(action->requesting(), error);
-		cancel  = true;
-		cleanup = true;
+		disconnect = true;
 		break;
 	}
 
 
-	if (cancel || cleanup)
+	if (disconnect || action->res_completion.complete)
 	{
+		disconnect = true;
+
+		// Turn message over to handler
+		if (action->res_completion.complete || (action->res_completion.implicit() && disconnect))
+		{
+			if (handler)
+			{
+				handler->async_recv(action->requesting(), std::move(action->res));
+			}
+		}
+
+		// Disconnect
 		if (action->conn)
 		{
-			// Disconnect
-			handler->httpConn_close(action->conn);
+			if (handler)
+			{
+				handler->httpConn_close(action->conn);
+			}
 			action->conn = nng::http::conn();
 		}
 
@@ -208,9 +253,12 @@ void HttpClient::Action::_callback(void *_action)
 	}
 
 
+	/*
+		Lock for potential changes to the action list
+	*/
 	std::lock_guard<std::mutex> lock(client->mtx);
 
-	if (cancel || cleanup) action->state = IDLE;
+	if (disconnect) action->state = IDLE;
 
 	switch (action->state)
 	{
@@ -224,17 +272,23 @@ void HttpClient::Action::_callback(void *_action)
 		break;
 
 	case SEND:
-		// Request sent; listen for response.
+		// Request sent; begin receiving for response.
 		action->state = RECV;
+		action->recv_count = 0;
+		action->res_completion = {};
 		action->res = nng::make_msg(4096);
-		action->iov = action->iov = nng_iov{action->res.body().get().data(), action->res.body().size()};
+		action->iov = nng_iov{action->res.body().get().data(), 4096};
 		action->aio.set_iov(action->iov);
 		action->conn.read(action->aio);
 		break;
 
 	case RECV:
-		// Message has been received; fulfill promise and return to action pool.
-		[[fallthrough]];
+		// Receiving more of the message.
+		action->res.realloc(action->recv_count + 4096);
+		action->iov = nng_iov{action->res.body().get().data<char>() + action->recv_count, 4096};
+		action->aio.set_iov(action->iov);
+		action->conn.read(action->aio);
+		break;
 
 	default:
 		action->state = IDLE;

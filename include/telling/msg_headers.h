@@ -19,7 +19,12 @@ namespace telling
 		MsgHeaderView()                      noexcept    {}
 		MsgHeaderView(std::string_view line) noexcept    {parse_header(line);}
 
+		bool is(std::string_view header_name) const noexcept;
+
 		explicit operator bool() const    {return name.length() || value.length();}
+
+
+		int64_t value_dec(int64_t on_error = 0) const noexcept;
 
 
 		void parse_header(std::string_view line) noexcept;

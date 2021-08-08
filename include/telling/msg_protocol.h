@@ -38,6 +38,9 @@ namespace telling
 
 		// Properties...
 		std::string_view  preferred_newline() const noexcept    {return (code <= MsgProtocolCode::Telling) ? "\n" : "\r\n";}
+
+
+		bool is_http() const noexcept    {return code==MsgProtocolCode::Http_1_0 || code==MsgProtocolCode::Http_1_1;}
 	};
 
 	/*

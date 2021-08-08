@@ -222,3 +222,44 @@ void MsgLayout::_parse_msg(nng::view msg, TYPE _type)
 
 	_setStartLine(startLineWithNL, _type, parts[1].data(), parts[2].data(), parts[3].data());
 }
+
+
+
+MsgCompletion MsgView::completion() const noexcept
+{
+	MsgCompletion comp = {};
+
+	for (auto &h : headers())
+	{
+		if (h.is("Content-Length"))
+		{
+			comp.length_header = true;
+			comp.message_length = h.value_dec(0);
+		}
+		else if (h.is("Transfer-Encoding"))
+		{
+			if (h.value.find("chunked") != std::string::npos)
+				comp.is_chunked = true;
+		}
+	}
+	
+	// Explicit length
+	if (comp.length_header)
+	{
+		if (bodySize() >= comp.message_length)
+			comp.complete = true;
+	}
+
+	if (comp.is_chunked)
+	{
+		// Fuck.
+	}
+
+	if (comp.implicit() && !protocol().is_http())
+	{
+		comp.complete = true;
+		comp.message_length = bodySize();
+	}
+
+	return comp;
+}
