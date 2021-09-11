@@ -56,3 +56,9 @@ target_link_libraries(telling_test telling)
 
 # Solution name
 project(telling)
+
+
+
+# Installation
+install(TARGETS telling DESTINATION lib)
+install(FILES ${TELLING_HEADERS} DESTINATION include)
