@@ -70,7 +70,7 @@ namespace telling
 
 
 	protected:
-		void _init()    {initialize(_queue.get_weak());}
+		void _init()    {initialize(_queue.weak());}
 		edb::life_locked<AsyncRecvQueue<Pulling>> _queue;
 	};
 }

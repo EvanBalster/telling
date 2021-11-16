@@ -16,7 +16,7 @@ Server::ReqRep::ReqRep(Server &_server) :
 {
 	auto &log = server.log;
 
-	rep_send.send_init (rep_sendQueue.get_weak());
+	rep_send.send_init (rep_sendQueue.weak());
 	rep_recv.recv_start(get_weak());
 
 	// Set up device relay

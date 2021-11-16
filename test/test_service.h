@@ -119,7 +119,7 @@ namespace telling_test
 			Service(uri),
 			handler(*this, reply, lifetime_ms)
 		{
-			initialize(handler.get_weak());
+			initialize(handler.weak());
 		}
 		~Service_AIO()
 		{

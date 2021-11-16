@@ -292,7 +292,7 @@ Server::Route::Route(Server &_server, std::string _path) :
 	req_send_to_service  (req.socketView(), ClientRequesting{}),
 	req_recv_from_service(req.socketView(), ServiceReplying{})
 {
-	req_send_to_service.send_init(req_sendQueue.get_weak());
+	req_send_to_service.send_init(req_sendQueue.weak());
 
 	// Route replies from services
 	req_recv_from_service.recv_start(server.reply.get_weak());

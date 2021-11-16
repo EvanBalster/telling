@@ -36,12 +36,49 @@ namespace telling
 		explicit operator bool() const    {return T_String::data() != nullptr;}
 
 		bool    hasPrefix(std::string_view prefix)                    const    {return T_String::rfind(prefix, 0) == 0;}
-		UriView substr   (size_t pos, size_t len = std::string::npos) const    {return T_String::data() ? std::string_view(*this).substr(pos, T_String::length()) : Uri_();}
+		UriView substr   (size_t pos, size_t len = std::string::npos) const    {return T_String::data() ? std::string_view(*this).substr(pos, len) : Uri_();}
 
 		/*
 			If the URI matches this prefix, returns the remainder of the URI (which is truthy).
 				Otherwise, returns an empty, falsy URI.
 		*/
 		UriView subpath  (std::string_view prefix)                    const    {return hasPrefix(prefix) ? std::string_view(*this).substr(prefix.length()) : Uri_();}
+
+
+		/*
+			Get the first/last elements of the path, delimited by slashes '/'.
+				The result will never include slashes.
+				Consecutive slashes will be treated as one slash.
+				pop_ methods may leave leading or trailing slashes.
+
+			If front() or back() is empty the remaining URI consists of nothing but slashes.
+		*/
+		std::string_view front() const noexcept
+		{
+			auto beg = find_first_not_of('/'), end = find_first_of('/', beg);
+			if (beg == npos) beg = length();
+			if (end == npos) end = length();
+			return std::string_view(data()+beg, end-beg);
+		}
+		T_String pop_front()
+		{
+			auto range = this->front(); T_String result(range);
+			if (range.length()) *this = this->T_String::substr((range.data()-data())+range.length());
+			return result;
+		}
+		std::string_view back() const noexcept
+		{
+			if (!length()) return std::string_view();
+			auto end = find_last_not_of('/'), beg = find_last_of('/', end);
+			if (beg == npos) beg = 0;        else ++beg;
+			if (end == npos) end = length(); else ++end;
+			return std::string_view(data()+beg, end-beg);
+		}
+		T_String pop_back()
+		{
+			auto range = this->back(); T_String result(range);
+			if (range.length()) *this = this->T_String::substr(0, range.data()-data());
+			return result;
+		}
 	};
 }

@@ -83,11 +83,11 @@ namespace afar
 	/*
 		Exception thrown when path is missing or taken
 	*/
-	class CallPathException : public std::logic_error
+	class CallPathException : public std::runtime_error
 	{
 	public:
-		CallPathException(const std::string &what_arg)    : logic_error(what_arg) {}
-		CallPathException(const char        *what_arg)    : logic_error(what_arg) {}
+		CallPathException(const std::string &what_arg)    : runtime_error(what_arg) {}
+		CallPathException(const char        *what_arg)    : runtime_error(what_arg) {}
 	};
 
 	/*

@@ -98,7 +98,7 @@ namespace telling
 			PubSub(Server&);
 			~PubSub();
 
-			std::weak_ptr<PubSub> get_weak()    {return async_lifetime.get_weak(this);}
+			std::weak_ptr<PubSub> get_weak()    {return async_lifetime.weak(this);}
 
 			static const char *Name()    {return "*PUB";}
 			Socket &hostSocket()         {return *publish.socket();}
@@ -127,7 +127,7 @@ namespace telling
 			PushPull(Server&);
 			~PushPull();
 
-			std::weak_ptr<PushPull> get_weak()    {return async_lifetime.get_weak(this);}
+			std::weak_ptr<PushPull> get_weak()    {return async_lifetime.weak(this);}
 
 			static const char *Name()    {return "*PULL";}
 			Socket &hostSocket()         {return *pull.socket();}
@@ -161,7 +161,7 @@ namespace telling
 			ReqRep(Server&);
 			~ReqRep();
 
-			std::weak_ptr<ReqRep> get_weak()    {return async_lifetime.get_weak(this);}
+			std::weak_ptr<ReqRep> get_weak()    {return async_lifetime.weak(this);}
 
 			static const char *Name()    {return "*REP";}
 			Socket &hostSocket()         {return reply_ext;}
@@ -346,7 +346,7 @@ namespace telling
 			Services(Server&);
 			~Services();
 
-			std::weak_ptr<Services> get_weak()    {return async_lifetime.get_weak(this);}
+			std::weak_ptr<Services> get_weak()    {return async_lifetime.weak(this);}
 
 			static const char *Name()    {return "*services";}
 

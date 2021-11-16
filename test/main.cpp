@@ -275,6 +275,30 @@ void test_system_errors()
 }
 
 
+template<typename Uri_t, typename ExtractMethod>
+static void UriParseTest(Uri_t uri, ExtractMethod extract, std::string_view test_name)
+{
+	std::cout << "Test " << test_name << " ... ";
+
+	std::cout << "\t`" << std::string_view(uri) << "` > ";
+	for (size_t i = 0; i < 100; ++i)
+	{
+		auto frag = (uri.*extract)();
+		if (!frag.length()) break;
+		std::cout << " `" << frag << "'";
+	}
+	std::cout << std::endl;
+}
+
+static void UriParseTests(std::string_view s)
+{
+	UriParseTest<UriView>(s, &UriView::pop_front, "UriView::pop_front");
+	UriParseTest<Uri    >(s, &Uri    ::pop_front, "    Uri::pop_front");
+	UriParseTest<UriView>(s, &UriView::pop_back,  "UriView::pop_back ");
+	UriParseTest<Uri    >(s, &Uri    ::pop_back,  "    Uri::pop_back ");
+}
+
+
 int main(int argc, char **argv)
 {
 	//nng::inproc::register_transport();
@@ -284,25 +308,32 @@ int main(int argc, char **argv)
 
 	//test_system_errors();
 
+	{
+		UriParseTests("tetrahedron");
+		UriParseTests("tetra/hedron");
+		UriParseTests("midi/in_11//sx7/beg/");
+		UriParseTests("///bug/in//code?///");
+	}
 
+#if 0
 	test_message_parsers(false);
 
 
 	cout << endl;
 	cout << "Press ENTER to continue..." << endl;
 	std::cin.get();
-
+#endif
 
 	cout << endl;
 	cout << "********* HTTP TEST BEGIN *********" << endl;
 	try
 	{
-		HttpClient_Box httpClient(nng::url("https://imitone.com"));
+		HttpClient_Box httpClient(nng::url("https://127.0.0.1:8080"));
 
 		MsgWriter wreq(Http);
 		//wreq.startRequest("/mothership/error_query.php");
-		wreq.startRequest("/activate.php");
-		wreq.writeHeader("Host", "imitone.com");
+		wreq.startRequest("/butts.html");
+		//wreq.writeHeader("Host", "127.0.0.1");
 		//wreq.writeHeader_Length();
 
 		nng::msg reqMsg = wreq.release();
@@ -329,9 +360,6 @@ int main(int argc, char **argv)
 	}
 	cout << "********* HTTP TEST END *********" << endl;
 	cout << endl;
-
-
-	std::system_category();
 
 	using namespace std::chrono_literals;
 
@@ -531,7 +559,7 @@ int main(int argc, char **argv)
 		cout << "==== Creating client." << endl;
 
 #if CLIENT_AIO
-		Client client(clientHandler.get_weak());
+		Client client(clientHandler.weak());
 #else
 		Client_Box client;
 #endif
