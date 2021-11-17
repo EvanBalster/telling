@@ -80,8 +80,8 @@ void MsgWriter::startRequest(std::string_view uri, Method method)
 	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
 	out << method.toString()
 		<< ' ' << uri
-		<< ' ' << protocol.toString();
-	_newline();
+		<< ' ' << protocol.toString()
+		<< protocol.preferred_newline();
 }
 
 void MsgWriter::startReply(Status status, std::string_view reason)
@@ -94,8 +94,8 @@ void MsgWriter::startReply(Status status, std::string_view reason)
 	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
 	out << protocol.toString()
 		<< ' ' << status.toString()
-		<< ' ' << reason;
-	_newline();
+		<< ' ' << reason
+		<< protocol.preferred_newline();
 }
 
 void MsgWriter::startReport(std::string_view uri, Status status, std::string_view reason)
@@ -111,8 +111,8 @@ void MsgWriter::startReport(std::string_view uri, Status status, std::string_vie
 	out << uri
 		<< ' ' << protocol.toString()
 		<< ' ' << status.toString()
-		<< ' ' << reason;
-	_newline();
+		<< ' ' << reason
+		<< protocol.preferred_newline();
 }
 
 void MsgWriter::writeHeader(std::string_view name, std::string_view value)
@@ -126,8 +126,7 @@ void MsgWriter::writeHeader(std::string_view name, std::string_view value)
 		throw MsgException(MsgError::HEADER_MALFORMED, 0, 0);
 
 	nng::msgbuf out = bodyBuf(std::ios::out | std::ios::binary | std::ios::ate);
-	out << name << ':' << value;
-	_newline();
+	out << name << ':' << value << protocol.preferred_newline();
 }
 
 
@@ -201,6 +200,6 @@ void MsgWriter::writeHeader_Length(size_t maxLength)
 	head.lengthSize   = digits;
 
 	// Unlikely we'll need to deal with messages >= 100 exabytes
-	out << std::string_view("                    ", digits);
-	_newline();
+	out << std::string_view("                    ", digits)
+		<< protocol.preferred_newline();
 }
