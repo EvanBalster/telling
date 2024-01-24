@@ -102,7 +102,7 @@ namespace telling
 					unsigned portchars = 0u;
 					while (port_ != 0)
 					{
-						portstr[portchars++] = (port_ % 10);
+						portstr[portchars++] = '0' + (port_ % 10);
 						port_ /= 10;
 					}
 					for (unsigned i = std::max(portchars, 1u); i-- > 0;)

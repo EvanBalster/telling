@@ -185,7 +185,7 @@ void HttpClient::Action::_callback(void *_action)
 
 				handler->async_response_progress(action->requesting(), action->res_completion, msg);
 			}
-			catch (MsgException &e)
+			catch (MsgException &)
 			{
 				// Not complete I guess
 			}

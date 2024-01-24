@@ -75,7 +75,7 @@ void Reply::_aioReceived(void *_comm)
 			nng::msg responseMsg;
 			handler->async_recv(
 				Replying{comm, queryID, {&responseMsg}},
-				std::move(comm->aio_recv.release_msg()));
+				comm->aio_recv.release_msg());
 
 			// Responding through the tag
 			if (responseMsg)
