@@ -10,7 +10,7 @@
 #include <map>
 #include <nngpp/nngpp.h>
 #include <tsl/htrie_map.h>
-#include <life_lock.h>
+#include <life_lock.hpp>
 
 #include "host_address.h"
 #include "io_queue.h"

@@ -46,6 +46,8 @@ namespace telling
 		template<typename C=char, class Tr=std::char_traits<C>>
 		nng::basic_omsgstream<C,Tr> writeBody() noexcept    {_autoCloseHeaders(); return nng::basic_omsgstream<C,Tr>(bodyBuf<C,Tr>(std::ios::out | std::ios::binary | std::ios::ate));}
 
+		void reserveBodyBytes(size_t capac)                 {_autoCloseHeaders(); nng_msg_reserve(msg.get(), msg.body().size() + capac);}
+
 
 		/*
 			STEP 4: release the composed message.

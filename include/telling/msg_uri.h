@@ -55,29 +55,29 @@ namespace telling
 		*/
 		std::string_view front() const noexcept
 		{
-			auto beg = find_first_not_of('/'), end = find_first_of('/', beg);
-			if (beg == npos) beg = length();
-			if (end == npos) end = length();
-			return std::string_view(data()+beg, end-beg);
+			auto beg = this->find_first_not_of('/'), end = this->find_first_of('/', beg);
+			if (beg == this->npos) beg = this->length();
+			if (end == this->npos) end = this->length();
+			return std::string_view(this->data()+beg, end-beg);
 		}
 		T_String pop_front()
 		{
 			auto range = this->front(); T_String result(range);
-			if (range.length()) *this = this->T_String::substr((range.data()-data())+range.length());
+			if (range.length()) *this = this->T_String::substr((range.data()-this->data())+range.length());
 			return result;
 		}
 		std::string_view back() const noexcept
 		{
-			if (!length()) return std::string_view();
-			auto end = find_last_not_of('/'), beg = find_last_of('/', end);
-			if (beg == npos) beg = 0;        else ++beg;
-			if (end == npos) end = length(); else ++end;
-			return std::string_view(data()+beg, end-beg);
+			if (!this->length()) return std::string_view();
+			auto end = this->find_last_not_of('/'), beg = this->find_last_of('/', end);
+			if (beg == this->npos) beg = 0;              else ++beg;
+			if (end == this->npos) end = this->length(); else ++end;
+			return std::string_view(this->data()+beg, end-beg);
 		}
 		T_String pop_back()
 		{
 			auto range = this->back(); T_String result(range);
-			if (range.length()) *this = this->T_String::substr(0, range.data()-data());
+			if (range.length()) *this = this->T_String::substr(0, range.data()-this->data());
 			return result;
 		}
 	};

@@ -4,7 +4,7 @@
 #include <utility>
 #include <unordered_set>
 #include <mutex>
-#include <life_lock.h>
+#include <life_lock.hpp>
 #include "io_queue.h"
 #include "socket.h"
 #include "async_loop.h"

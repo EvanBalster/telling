@@ -32,7 +32,7 @@ static void LogSocketEvent(const Socket &s, std::string_view event, std::string_
 	
 	if (addr.length() || otherID) std::cout << ": ";
 	if (addr.length()) std::cout << addr;
-	if (otherID) std::cout << '#' << otherID;
+	if (otherID) std::cout << " (#" << otherID << ')';
 	std::cout << std::endl;
 #endif
 }

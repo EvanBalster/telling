@@ -40,6 +40,9 @@ Service::~Service()
 
 void Service::initialize(std::weak_ptr<ServiceHandler_Base> _handler)
 {
+	_replier  .socket()->setPipeHandler(_handler);
+	_puller   .socket()->setPipeHandler(_handler);
+	_publisher.socket()->setPipeHandler(_handler);
 	_replier  .initialize(_handler);
 	_puller   .initialize(_handler);
 	_publisher.initialize(_handler);

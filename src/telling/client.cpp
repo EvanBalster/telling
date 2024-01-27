@@ -35,6 +35,9 @@ Client::~Client()
 
 void Client::initialize(std::weak_ptr<ClientHandler_Base> _handler)
 {
+	_requester .socket()->setPipeHandler(_handler);
+	_subscriber.socket()->setPipeHandler(_handler);
+	_pusher    .socket()->setPipeHandler(_handler);
 	_requester .initialize(_handler);
 	_subscriber.initialize(_handler);
 	_pusher    .initialize(_handler);

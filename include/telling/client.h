@@ -72,7 +72,7 @@ namespace telling
 			Create a request. Throws nng::exception on failure.
 				Handler will eventually get reply_recv or request_error.
 		*/
-		void request(nng::msg &&msg)                      {_requester.request(std::move(msg));}
+		QueryID request(nng::msg &&msg)                   {return _requester.request(std::move(msg));}
 
 		/*
 			Use subscribe(string topic) to set up subscriptions.

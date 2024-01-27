@@ -117,7 +117,7 @@ namespace telling
 	class MsgError
 	{
 	public:
-		enum ERROR
+		enum ERROR_ENUM
 		{
 			SUCCESS              = 0,
 			HEADER_INCOMPLETE    = 1,
@@ -129,7 +129,7 @@ namespace telling
 		};
 	};
 
-	using MSG_ERROR = MsgError::ERROR;
+	using MSG_ERROR = MsgError::ERROR_ENUM;
 
 
 	class MsgException : public ReplyableException, public MsgError
