@@ -451,7 +451,7 @@ int main(int argc, char **argv)
 				if ((++total&7) == 0)
 				{
 					std::cout.put('~');
-					std:cout << std::flush;
+					std::cout << std::flush;
 				}
 
 				//print(bull);

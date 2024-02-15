@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.18)
+
+include(CMakePackageConfigHelpers)
 
 # specify the C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -7,16 +9,29 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 enable_language(CXX)
 enable_language(C)
 
+if (MSVC)
+    add_compile_options(/MP) # Multi-core compilation (faster)
+    add_compile_options("/Zc:__cplusplus") # Correct __cplusplus macro
+endif()
+
 find_package (Threads)
+find_package (nngpp CONFIG REQUIRED)
+#find_package (rapidjson CONFIG REQUIRED)
 
 
 # Library project
 project(telling)
 
-file(GLOB TELLING_HEADERS include/telling/*.h)
-file(GLOB TELLING_SOURCES src/telling/*.cpp)
+add_library(telling STATIC)
 
-add_library(telling STATIC ${TELLING_HEADERS} ${TELLING_SOURCES})
+file(GLOB_RECURSE telling.headers include/telling/*.h)
+file(GLOB_RECURSE telling.sources src/telling/*.cpp src/telling/*.h)
+
+target_sources(telling
+    PRIVATE ${telling.sources}
+    PUBLIC FILE_SET HEADERS
+        BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include
+        FILES ${telling.headers})
 
 #target_compile_definitions(telling PUBLIC NNG_STATIC_LIB=1)
 #add_library(nng STATIC IMPORTED)
@@ -24,25 +39,26 @@ add_library(telling STATIC ${TELLING_HEADERS} ${TELLING_SOURCES})
 
 find_package(nng CONFIG REQUIRED)
 target_link_libraries(telling PUBLIC nng::nng)
+target_include_directories(telling PUBLIC ${NNGPP_INCLUDE_DIRS})
 
+target_include_directories(telling PRIVATE "include")
+target_include_directories(telling PRIVATE "thirdparty/include")
 
-#find_package(MbedTLS CONFIG REQUIRED)
-#target_link_libraries(telling PUBLIC MbedTLS::mbedtls)
-#target_link_libraries(telling PUBLIC MbedTLS::mbedx509)
-#target_link_libraries(telling PUBLIC MbedTLS::mbedcrypto)
+set_target_properties(telling PROPERTIES DEBUG_POSTFIX d)
 
-
-#add_library(mbedtls STATIC IMPORTED)
-#add_library(mbedx509 STATIC IMPORTED)
-#add_library(mbedcrypto STATIC IMPORTED)
-#set_target_properties(mbedtls PROPERTY IMPORTED_LOCATION "${CMAKE_INSTALL_LIBDIR}/mbed TLS")
-#set_target_properties(mbedx509 PROPERTY IMPORTED_LOCATION "${CMAKE_INSTALL_LIBDIR}/mbed TLS")
-#set_target_properties(mbedcrypto PROPERTY IMPORTED_LOCATION "${CMAKE_INSTALL_LIBDIR}/mbed TLS")
-
-#target_link_libraries(telling nng::nng mbedtls mbedx509 mbedcrypto)
-
-target_include_directories(telling PUBLIC "include")
-target_include_directories(telling PUBLIC "thirdparty/include")
+set_property(TARGET telling PROPERTY EXPORT_NAME telling)
+configure_package_config_file(
+    telling-config.cmake.in
+    telling-config.cmake
+    INSTALL_DESTINATION lib/telling)
+install(TARGETS telling
+    EXPORT telling-targets
+    FILE_SET HEADERS)
+install(EXPORT telling-targets
+    DESTINATION lib/telling
+    NAMESPACE "telling::")
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/telling-config.cmake
+    DESTINATION lib/telling)
 
 
 # TEST project
@@ -53,6 +69,8 @@ add_executable(telling_test ${TEST_SOURCES})
 
 target_link_libraries(telling_test telling)
 
+target_include_directories(telling_test PRIVATE "thirdparty/include")
+
 
 # Solution name
 project(telling)
@@ -61,4 +79,4 @@ project(telling)
 
 # Installation
 install(TARGETS telling DESTINATION lib)
-install(FILES ${TELLING_HEADERS} DESTINATION include)
+install(FILES ${telling.headers} DESTINATION include)
