@@ -62,7 +62,7 @@ namespace telling_test
 			{
 				long long recv_time = telling_test::MicroTime();
 
-				if ((recv_time - created_microTime) > 1000*long long(lifetime_ms))
+				if ((recv_time - created_microTime) > 1000*((long long) lifetime_ms))
 				{
 					// Pretend I don't exist
 					throw status_exceptions::NotFound();
