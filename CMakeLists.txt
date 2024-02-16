@@ -16,6 +16,7 @@ endif()
 
 find_package (Threads)
 find_package (nngpp CONFIG REQUIRED)
+find_package (mbedtls CONFIG REQUIRED)
 #find_package (rapidjson CONFIG REQUIRED)
 
 
@@ -39,7 +40,7 @@ target_sources(telling
 
 find_package(nng CONFIG REQUIRED)
 target_link_libraries(telling PUBLIC nng::nng)
-target_include_directories(telling PUBLIC ${NNGPP_INCLUDE_DIRS})
+target_link_libraries(telling PUBLIC nng::nngpp)
 
 target_include_directories(telling PRIVATE "include")
 target_include_directories(telling PRIVATE "thirdparty/include")
@@ -74,9 +75,3 @@ target_include_directories(telling_test PRIVATE "thirdparty/include")
 
 # Solution name
 project(telling)
-
-
-
-# Installation
-install(TARGETS telling DESTINATION lib)
-install(FILES ${telling.headers} DESTINATION include)
