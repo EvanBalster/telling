@@ -46,20 +46,21 @@ target_include_directories(telling PRIVATE "include")
 target_include_directories(telling PRIVATE "thirdparty/include")
 
 set_target_properties(telling PROPERTIES DEBUG_POSTFIX d)
+set_target_properties(telling PROPERTIES RELWITHDEBINFO_POSTFIX "-dev")
 
 set_property(TARGET telling PROPERTY EXPORT_NAME telling)
 configure_package_config_file(
     telling-config.cmake.in
     telling-config.cmake
-    INSTALL_DESTINATION lib/telling)
+    INSTALL_DESTINATION lib/cmake/telling)
 install(TARGETS telling
     EXPORT telling-targets
     FILE_SET HEADERS)
 install(EXPORT telling-targets
-    DESTINATION lib/telling
+    DESTINATION lib/cmake/telling
     NAMESPACE "telling::")
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/telling-config.cmake
-    DESTINATION lib/telling)
+    DESTINATION lib/cmake/telling)
 
 
 # TEST project
