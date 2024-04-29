@@ -85,6 +85,8 @@ namespace telling
 			case Transport::IPC:
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 				uri = "ipc://";
+#elif __APPLE__
+				uri = "ipc:///tmp/";
 #else
 				uri = "ipc:///var/run/";
 #endif
