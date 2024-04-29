@@ -83,10 +83,10 @@ namespace telling
 				return uri;
 
 			case Transport::IPC:
-#if _MSC_VER
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 				uri = "ipc://";
 #else
-				uri = "ipc:///run/";
+				uri = "ipc:///var/run/";
 #endif
 				uri.append(name);
 				return uri;
