@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.18)
 
+# automatically detect manifest-mode vcpkg dependencies.
+if (WIN32)
+    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows")
+endif()
+
+project(telling)
+
 include(CMakePackageConfigHelpers)
 
 # specify the C++ standard
@@ -18,10 +25,6 @@ find_package (Threads)
 find_package (nngpp CONFIG REQUIRED)
 find_package (mbedtls CONFIG REQUIRED)
 #find_package (rapidjson CONFIG REQUIRED)
-
-
-# Library project
-project(telling)
 
 add_library(telling STATIC)
 

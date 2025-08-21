@@ -1,0 +1,5 @@
+{
+    "dependencies" : [
+        "mbedtls", {"name":"nng","features":["mbedtls"]}, "nngpp"
+    ]
+}
