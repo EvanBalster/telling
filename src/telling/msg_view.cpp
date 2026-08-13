@@ -224,6 +224,50 @@ void MsgLayout::_parse_msg(nng::view msg, TYPE _type)
 }
 
 
+bool MsgView::_process_chunked(bool compact) noexcept
+{
+	char *str = body().data<char>();
+	const auto size = body().size();
+	size_t pos = 0, pos_w = 0;
+
+	while (true)
+	{
+		size_t chunk = 0;
+		size_t prev = pos;
+		while (true)
+		{
+			if (pos >= size) return false;
+			char c = str[pos];
+			if      (c >= '0' && c <= '9') chunk = 16ull*chunk + c-'0';
+			else if (c >= 'a' && c <= 'f') chunk = 16ull*chunk + 10ull+size_t(c-'a');
+			else if (c >= 'A' && c <= 'F') chunk = 16ull*chunk + 10ull+size_t(c-'A');
+			else break;
+			++pos;
+		}
+
+		// Complete upon receiving '0' chunksize.
+		if (chunk == 0)
+		{
+			if (pos > prev)
+			{
+				if (compact) msg.body().chop(size-pos_w);
+				return true;
+			}
+			else return false;
+		}
+
+		pos += ((str[pos]=='\n') ? 1ull : 2ull);
+		if (compact)
+		{
+			std::memmove(str+pos_w, str+pos, chunk);
+			pos_w += chunk;
+		}
+		pos += chunk;
+		if (pos >= size) return false;
+		pos = pos + ((str[pos]=='\n') ? 1ull : 2ull);
+	}
+}
+
 
 MsgCompletion MsgView::completion() const noexcept
 {
@@ -252,7 +296,7 @@ MsgCompletion MsgView::completion() const noexcept
 
 	if (comp.is_chunked)
 	{
-		// Fuck.
+		comp.complete = const_cast<MsgView*>(this)->_process_chunked(false);
 	}
 
 	if (comp.implicit() && !protocol().is_http())

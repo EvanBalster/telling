@@ -231,6 +231,13 @@ void HttpClient::Action::_callback(void *_action)
 		// Turn message over to handler
 		if (action->res_completion.complete || (action->res_completion.implicit() && disconnect))
 		{
+			if (action->res_completion.is_chunked)
+			{
+				// De-chunk the message.
+				MsgView msg(std::move(action->res));
+				msg.compactifyChunks();
+			}
+
 			if (handler)
 			{
 				handler->async_recv(action->requesting(), std::move(action->res));

@@ -117,10 +117,22 @@ namespace telling
 		*/
 		MsgCompletion completion() const noexcept;
 
+		/*
+			Compactify the body of a message that uses chunked transfer encoding.
+				This function does not check for the Transfer-Encoding header!
+				Call completion() to verify the message is chunked and complete before use.
+				Returns false on parse error, leaving message contents undefined.
+		*/
+		bool compactifyChunks() noexcept    {return _process_chunked(true);}
+
 
 
 	public:
 		nng::msg_view    msg;
+
+
+	protected:
+		bool _process_chunked(bool compact) noexcept;
 
 
 	private:
