@@ -199,6 +199,7 @@ void HttpClient::Action::_callback(void *_action)
 		}
 		break;
 
+	case nng::error::connrefused:
 	case nng::error::connaborted:
 	case nng::error::connreset:
 	case nng::error::connshut:
